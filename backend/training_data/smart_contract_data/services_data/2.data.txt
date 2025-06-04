@@ -1,0 +1,440 @@
+// service.rs for VNFT Manager Contract
+use gstd::exec;
+// Necesary imports
+use sails_rs::{
+    calls::{Call, Query}, gstd::msg, prelude::*
+};
+
+// Import the struct state (VFTManagerState)
+use crate::{
+    clients::extended_vnft_client::{
+        traits::Vnft, TokenMetadata
+    },
+};
+// Import the Client from the extended-vft contract (is in the clients directory)
+
+// VNFTManager state
+static mut VNFT_MANAGER_STATE: Option<VNFTManagerState> = None;
+
+// Struct to handle the state of the contract
+#[derive(Default)]
+pub struct VNFTManagerState {
+    // Vec to store admins that can do special actions
+    pub admins: Vec<ActorId>,
+    // contract id from the extended vft contract
+    pub vnft_contract_id: Option<ActorId>,
+}
+
+impl VNFTManagerState {
+    // Related function "new", returns a new VNFTManagerState instance with a new admin address
+    // Is necessary to pass an address to be the first admin to perform the actions (commands) in
+    // the contract
+    pub fn new(admin: ActorId) -> Self {
+        let mut temp = Self::default();
+        temp.admins.push(admin);
+        temp
+    }
+
+    // Related function "new_with_contract_id",  returns a new VNFTManagerState instance with a 
+    // new admin address and a contract id from extended_vnft contract.
+    // Is necessary to pass an address to be the first admin to perform the actions (commands) in
+    // the contract, and the extended_vnft contract id
+    pub fn new_with_contract_id(admin: ActorId, vnft_contract_id: ActorId) -> Self {
+        let mut temp = Self::default();
+        temp.admins.push(admin);
+        temp.vnft_contract_id = Some(vnft_contract_id);
+        temp
+    }
+
+    // Helper function that returns if an address is an admin
+    pub fn is_admin(&self, address: &ActorId) -> bool {
+        self.admins.contains(address)
+    }
+}
+
+// Service struct, that specify the client to use VnftClient (generic type,
+// it will take its type in the impl block)
+pub struct VNFTManagerService<VnftClient> {
+    pub vnft_client: VnftClient
+}
+
+#[service]
+impl<VnftClient> VNFTManagerService<VnftClient> // VNFTManager service, with the extended-vft client
+where VnftClient: Vnft { // We specify the type of the generic type (The client) to be used
+    // Related function "seed", it will initiate the Service state. IMPORTANT: only call once
+    // Init the state with one admin
+    // If you call this related function, you cant call the "seed_with_contract_id" seed function
+    pub fn seed(
+        admin: ActorId,
+    ) {
+        unsafe {
+            VNFT_MANAGER_STATE = Some(
+                VNFTManagerState::new(admin)
+            );
+        };
+    }
+
+    // Related function "seed_with_contract_id", it will initiate the Service state. IMPORTANT: only call once
+    // Init the state with one admin and the extended_vnft contract id
+    // if you call this related function, you cant call the "seed" seed function
+    pub fn seed_with_contract_id(
+        admin: ActorId,
+        vnft_contract_id: ActorId
+    ) {
+        unsafe {
+            VNFT_MANAGER_STATE = Some(
+                VNFTManagerState::new_with_contract_id(
+                    admin, 
+                    vnft_contract_id
+                )
+            );
+        };
+    }
+
+    // Related function "new", returns a new Struct Service instance
+    pub fn new(
+        vnft_client: VnftClient
+    ) -> Self {
+        Self {
+            vnft_client
+        }
+    }
+
+    // ## Add new a new admin
+    // Only admins can add others admins
+    pub fn add_admin(&mut self, new_admin_address: ActorId) -> VNFTManagerEvents {
+        let state = self.state_mut();
+        let caller = msg::source();
+
+        if !state.is_admin(&caller) {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::OnlyAdminsCanDoThatAction
+            );
+        }
+
+        state.admins.push(new_admin_address);
+
+        VNFTManagerEvents::NewAdminAdded(new_admin_address)
+    }
+
+    // ## Change vnft contract id
+    // Only the contract admins can perform this action
+    pub fn set_vft_contract_id(&mut self, vft_contract_id: ActorId) -> VNFTManagerEvents {
+        let state = self.state_mut();
+        let caller = msg::source();
+
+        if !state.is_admin(&caller) {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::OnlyAdminsCanDoThatAction
+            );
+        }
+
+        state.vnft_contract_id = Some(vft_contract_id);
+
+        VNFTManagerEvents::VFTContractIdSet
+    }
+
+    // ## Mint a new nft to a user
+    // Only the contract admins can perform this action
+    pub async fn mint_nft(&mut self, to: ActorId, token_metadata: TokenMetadata) -> VNFTManagerEvents {
+        let state = self.state_mut();
+        let caller = msg::source();
+
+        // Check if the caller is an admin
+        if !state.is_admin(&caller) {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::OnlyAdminsCanDoThatAction
+            );
+        }
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .mint(to, token_metadata) // Set the method to call from contract
+            .send_recv(vnft_contract_id) // send and wait for response
+            .await;
+
+        // If contract return an error, notify to the user
+        if let Err(error) = response {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::ErrorInVNFTContract(
+                    error.to_string()
+                )
+            );
+        }
+
+        VNFTManagerEvents::NewNFTMinted
+    }
+
+    // ## Burn an nft from a user
+    // Only the contract admins can perform this action
+    pub async fn burn_nft(&mut self, from: ActorId, token_id: U256) -> VNFTManagerEvents {
+        let state = self.state_mut();
+        let caller = msg::source();
+
+        // Check if the caller is an admin
+        if !state.is_admin(&caller) {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::OnlyAdminsCanDoThatAction
+            );
+        }
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .burn(from, token_id) // Set the method to call from contract
+            .send_recv(vnft_contract_id) // send and wait for response
+            .await;
+        
+        // If contract return an error, notify to the user
+        if let Err(error) = response {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::ErrorInVNFTContract(
+                    error.to_string()
+                )
+            );
+        }
+
+        VNFTManagerEvents::NftBurned
+    }
+
+    // ## Transfer an nft to a new user
+    // This command only works if the user approve the contract to transfer the nft
+    pub async fn transfer_from(&mut self, from: ActorId, to: ActorId, token_id: U256) -> VNFTManagerEvents {
+        let state = self.state_mut();
+        let caller = msg::source();
+
+        // Check if the caller is an admin
+        if !state.is_admin(&caller) {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::OnlyAdminsCanDoThatAction
+            );
+        }
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Read the state from extended_vnft contract to get the nft owner
+        let approved = self.vnft_client // set the client
+            .get_approved(token_id) // set the method to call
+            .recv(vnft_contract_id) // send and wait response
+            .await;
+
+        // Check if the contract is approved
+        match approved {
+            Ok(approved_address) => {
+                if approved_address != exec::program_id() {
+                    return VNFTManagerEvents::Error(
+                        VNFTManagerErrors::ContractIsNotApproved
+                    );
+                }
+            },
+            Err(error) => {
+                return VNFTManagerEvents::Error(
+                    VNFTManagerErrors::ErrorInVNFTContract(error.to_string())
+                );
+            }
+        }
+ 
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .transfer_from(from, to, token_id) // Set the method to call from contract
+            .send_recv(vnft_contract_id) // send and wait for response
+            .await;
+        
+        // If contract return an error, notify to the user
+        if let Err(error) = response {
+            return VNFTManagerEvents::Error(
+                VNFTManagerErrors::ErrorInVNFTContract(
+                    error.to_string()
+                )
+            );
+        }
+
+        VNFTManagerEvents::TokenTransferred
+    } 
+
+    pub async fn num_of_nfts_from_user(&self, user_address: ActorId) -> VNFTManagerQueryEvents {
+        let state = self.state_ref();
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerQueryEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .balance_of(user_address) // Set the method to call from contract
+            .recv(vnft_contract_id) // send and wait for response
+            .await;
+
+        // If contract return an error, notify to the user
+        let user_num_of_tokens = match response {
+            Ok(num_of_tokens) => num_of_tokens,
+            Err(error) => {
+                return VNFTManagerQueryEvents::Error(
+                    VNFTManagerErrors::ErrorInVNFTContract(error.to_string())
+                );
+            }
+        };
+
+        VNFTManagerQueryEvents::UserNumOfTokensOwned(user_num_of_tokens)
+    }
+
+    pub async fn num_of_nfts_from_user_as_u128(&self, user_address: ActorId) -> VNFTManagerQueryEvents {
+        let state = self.state_ref();
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerQueryEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .balance_of(user_address) // Set the method to call from contract
+            .recv(vnft_contract_id) // send and wait for response
+            .await;
+
+        // If contract return an error, notify to the user
+        let user_num_of_tokens = match response {
+            Ok(num_of_tokens) => num_of_tokens,
+            Err(error) => {
+                return VNFTManagerQueryEvents::Error(
+                    VNFTManagerErrors::ErrorInVNFTContract(error.to_string())
+                );
+            }
+        };
+
+        VNFTManagerQueryEvents::UserNumOfTokensOwnedAsu128(user_num_of_tokens.as_u128())
+    }
+
+    pub async fn nft_owner_by_token_id(&self, token_id: U256) -> VNFTManagerQueryEvents {
+        let state = self.state_ref();
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerQueryEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .owner_of(token_id) // Set the method to call from contract
+            .recv(vnft_contract_id) // send and wait for response
+            .await;
+
+        // If contract return an error, notify to the user
+        let owner = match response {
+            Ok(num_of_tokens) => num_of_tokens,
+            Err(error) => {
+                return VNFTManagerQueryEvents::Error(
+                    VNFTManagerErrors::ErrorInVNFTContract(error.to_string())
+                );
+            }
+        };
+
+        VNFTManagerQueryEvents::NFTOwner(owner)
+    }
+
+    pub async fn nft_address_approved(&self, token_id: U256) -> VNFTManagerQueryEvents {
+        let state = self.state_ref();
+
+        // Get the vnft contract id, if it is not set, return an error
+        let Some(vnft_contract_id) = state.vnft_contract_id.clone() else {
+            return VNFTManagerQueryEvents::Error(
+                VNFTManagerErrors::VftContractIdNotSet
+            );
+        };
+
+        // Send the message to the extended_vft contract and wait for response
+        let response = self.vnft_client // Set the client to call
+            .get_approved(token_id) // Set the method to call from contract
+            .recv(vnft_contract_id) // send and wait for response
+            .await;
+
+        // If contract return an error, notify to the user
+        let address = match response {
+            Ok(address) => {
+                if !address.is_zero() {
+                    Some(address)
+                } else {
+                    None
+                }
+            },
+            Err(error) => {
+                return VNFTManagerQueryEvents::Error(
+                    VNFTManagerErrors::ErrorInVNFTContract(error.to_string())
+                );
+            }
+        };
+
+        VNFTManagerQueryEvents::NFTAddressApproved(address)
+    }
+
+    fn state_mut(&self) -> &'static mut VNFTManagerState {
+        let state = unsafe { VNFT_MANAGER_STATE.as_mut() };
+        debug_assert!(state.is_none(), "state is not started!");
+        unsafe { state.unwrap_unchecked() }
+    }
+
+    fn state_ref(&self) -> &'static VNFTManagerState {
+        let state = unsafe { VNFT_MANAGER_STATE.as_ref() };
+        debug_assert!(state.is_none(), "state is not started!");
+        unsafe { state.unwrap_unchecked() }
+    }
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum VNFTManagerQueryEvents {
+    UserNumOfTokensOwned(U256),
+    UserNumOfTokensOwnedAsu128(u128),
+    NFTAddressApproved(Option<ActorId>),
+    NFTOwner(ActorId),
+    Error(VNFTManagerErrors)
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum VNFTManagerEvents {
+    VFTContractIdSet,
+    NewNFTMinted,
+    NftBurned,
+    TokenTransferred,
+    NewAdminAdded(ActorId),
+    Error(VNFTManagerErrors)
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum VNFTManagerErrors {
+    OnlyAdminsCanDoThatAction,
+    VftContractIdNotSet,
+    ContractIsNotApproved,
+    ErrorInVNFTContract(String),
+    OperationWasNotPerformed
+}

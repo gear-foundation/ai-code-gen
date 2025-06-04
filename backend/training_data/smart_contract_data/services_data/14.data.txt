@@ -1,0 +1,185 @@
+#![no_std]
+#![allow(static_mut_refs)]
+
+use sails_rs::{
+    prelude::*,
+    gstd::{msg, exec},
+    collections::HashMap,
+};
+
+pub static mut SUPPLY_CHAIN_STATE: Option<SupplyChainState> = None;
+
+/// Represents the stages an item can go through in the supply chain
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum Stage {
+    Created,
+    InTransit,
+    Delivered,
+}
+
+/// Struct that represents a product/item in the supply chain
+#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct Item {
+    pub id: u64,
+    pub description: String,
+    pub owner: ActorId,
+    pub stage: Stage,
+    pub history: Vec<(u64, Stage, ActorId)>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SupplyChainState {
+    pub admins: Vec<ActorId>,
+    pub items: HashMap<u64, Item>,
+    pub next_id: u64,
+}
+
+impl SupplyChainState {
+    pub fn init() {
+        unsafe {
+            SUPPLY_CHAIN_STATE = Some(SupplyChainState {
+                admins: vec![msg::source()],
+                items: HashMap::new(),
+                next_id: 1,
+            });
+        }
+    }
+    pub fn state_mut() -> &'static mut SupplyChainState {
+        let state = unsafe { SUPPLY_CHAIN_STATE.as_mut() };
+        debug_assert!(state.is_some(), "The state is not initialized");
+        unsafe { state.unwrap_unchecked() }
+    }
+    pub fn state_ref() -> &'static SupplyChainState {
+        let state = unsafe { SUPPLY_CHAIN_STATE.as_ref() };
+        debug_assert!(state.is_some(), "The state is not initialized");
+        unsafe { state.unwrap_unchecked() }
+    }
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum Events {
+    ItemCreated(u64, ActorId),
+    StageAdvanced(u64, Stage, ActorId),
+    OwnershipTransferred(u64, ActorId, ActorId),
+}
+
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct IoSupplyChainState {
+    pub admins: Vec<ActorId>,
+    pub items: Vec<Item>,
+}
+
+impl From<SupplyChainState> for IoSupplyChainState {
+    fn from(value: SupplyChainState) -> Self {
+        Self {
+            admins: value.admins,
+            items: value.items.values().cloned().collect(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Service;
+
+impl Service {
+    pub fn seed() {
+        SupplyChainState::init();
+    }
+}
+
+#[sails_rs::service(events = Events)]
+impl Service {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Adds a new supply chain item. Only admins can create items.
+    pub fn create_item(&mut self, description: String, initial_owner: ActorId) -> Events {
+        let mut state = SupplyChainState::state_mut();
+        let caller = msg::source();
+        if !state.admins.contains(&caller) {
+            panic!("Only admins can create items");
+        }
+        let item_id = state.next_id;
+        state.next_id = state.next_id.saturating_add(1);
+        let item = Item {
+            id: item_id,
+            description,
+            owner: initial_owner,
+            stage: Stage::Created,
+            history: vec![(exec::block_timestamp() as u64, Stage::Created, initial_owner)], 
+        };
+        state.items.insert(item_id, item);
+        self.emit_event(Events::ItemCreated(item_id, initial_owner))
+            .expect("Notification error");
+        Events::ItemCreated(item_id, initial_owner)
+    }
+
+    /// Transfers item ownership to a new owner. Only current owner can transfer.
+    pub fn transfer_item(&mut self, item_id: u64, new_owner: ActorId) -> Events {
+        let mut state = SupplyChainState::state_mut();
+        let caller = msg::source();
+        let item = state.items.get_mut(&item_id).expect("No such item");
+        if item.owner != caller {
+            panic!("Only the current owner can transfer the item");
+        }
+        let prev_owner = item.owner;
+        item.owner = new_owner;
+        item.history.push((exec::block_timestamp() as u64, item.stage, new_owner)); 
+        self.emit_event(Events::OwnershipTransferred(item_id, prev_owner, new_owner))
+            .expect("Notification error");
+        Events::OwnershipTransferred(item_id, prev_owner, new_owner)
+    }
+
+    /// Advances the stage of the item. Only the owner can advance the stage, and only in order.
+    pub fn advance_stage(&mut self, item_id: u64, next_stage: Stage) -> Events {
+        let mut state = SupplyChainState::state_mut();
+        let caller = msg::source();
+        let item = state.items.get_mut(&item_id).expect("No such item");
+        if item.owner != caller {
+            panic!("Only the item owner can advance the stage");
+        }
+        let valid_next = match (item.stage, next_stage) {
+            (Stage::Created, Stage::InTransit) => true,
+            (Stage::InTransit, Stage::Delivered) => true,
+            _ => false,
+        };
+        if !valid_next {
+            panic!("Invalid stage transition");
+        }
+        item.stage = next_stage;
+        item.history.push((exec::block_timestamp() as u64, next_stage, caller)); 
+        self.emit_event(Events::StageAdvanced(item_id, next_stage, caller))
+            .expect("Notification error");
+        Events::StageAdvanced(item_id, next_stage, caller)
+    }
+
+    /// Query the details of a single item by id.
+    pub fn query_item(&self, item_id: u64) -> Option<Item> {
+        SupplyChainState::state_ref().items.get(&item_id).cloned()
+    }
+
+    /// Query all items owned by a user.
+    pub fn query_items_by_owner(&self, owner: ActorId) -> Vec<Item> {
+        let state = SupplyChainState::state_ref();
+        state.items.values().filter(|item| item.owner == owner).cloned().collect()
+    }
+
+    /// Query the history of an item.
+    pub fn query_item_history(&self, item_id: u64) -> Option<Vec<(u64, Stage, ActorId)>> {
+        SupplyChainState::state_ref().items.get(&item_id).map(|item| item.history.clone())
+    }
+
+    /// Query contract state: admins and items.
+    pub fn query_state(&self) -> IoSupplyChainState {
+        SupplyChainState::state_ref().clone().into()
+    }
+}

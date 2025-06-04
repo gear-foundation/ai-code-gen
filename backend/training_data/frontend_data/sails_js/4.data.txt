@@ -1,0 +1,239 @@
+// idl example 
+
+constructor {
+  New : (name: str, symbol: str, decimals: u8);
+};
+
+service Vft {
+  Burn : (from: actor_id, value: u256) -> bool;
+  GrantAdminRole : (to: actor_id) -> null;
+  GrantBurnerRole : (to: actor_id) -> null;
+  GrantMinterRole : (to: actor_id) -> null;
+  Mint : (to: actor_id, value: u256) -> bool;
+  RevokeAdminRole : (from: actor_id) -> null;
+  RevokeBurnerRole : (from: actor_id) -> null;
+  RevokeMinterRole : (from: actor_id) -> null;
+  Approve : (spender: actor_id, value: u256) -> bool;
+  Transfer : (to: actor_id, value: u256) -> bool;
+  TransferFrom : (from: actor_id, to: actor_id, value: u256) -> bool;
+  query Admins : () -> vec actor_id;
+  query Burners : () -> vec actor_id;
+  query Minters : () -> vec actor_id;
+  query Allowance : (owner: actor_id, spender: actor_id) -> u256;
+  query BalanceOf : (account: actor_id) -> u256;
+  query Decimals : () -> u8;
+  query Name : () -> str;
+  query Symbol : () -> str;
+  query TotalSupply : () -> u256;
+
+  events {
+    Minted: struct {
+      to: actor_id,
+      value: u256,
+    };
+    Burned: struct {
+      from: actor_id,
+      value: u256,
+    };
+    Approval: struct {
+      owner: actor_id,
+      spender: actor_id,
+      value: u256,
+    };
+    Transfer: struct {
+      from: actor_id,
+      to: actor_id,
+      value: u256,
+    };
+  }
+};
+
+
+// React Component example with sails.js
+
+import React, { useState, useCallback, useEffect } from 'react';
+import styled, { keyframes } from 'styled-components';
+import { useAccount, useAlert, useApi } from '@gear-js/react-hooks';
+import { web3Enable, web3FromSource } from '@polkadot/extension-dapp';
+import { TransactionBuilder } from 'sails-js';
+import { Program, Service } from './lib';
+
+const VARA_NETWORK_ICON =
+  'https://img.cryptorank.io/coins/vara_network1695313579900.png';
+const VARA_TOKEN_ICON =
+  'https://s2.coinmarketcap.com/static/img/coins/200x200/28067.png';
+
+
+const spin = keyframes`
+  to { transform: rotate(360deg); }
+`;
+
+const MintContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+`;
+
+const Button = styled.button<{ disabled?: boolean }>`
+  position: relative;
+  padding: 0.85rem 2rem 0.85rem 2.5rem;
+  min-width: 180px;
+  font-size: 1.08rem;
+  font-weight: 600;
+  border: 2px solid #2e3148;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #2e3148;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  transition: background 0.18s, color 0.18s, opacity 0.18s;
+
+  &:hover {
+    background: ${({ disabled }) => (disabled ? '#fff' : '#f3f8ff')};
+  }
+  &:active {
+    background: ${({ disabled }) => (disabled ? '#fff' : '#dde6ff')};
+  }
+
+  ${({ disabled }) =>
+    disabled &&
+    `
+    opacity: 0.55;
+    cursor: not-allowed;
+  `}
+`;
+
+const Spinner = styled.div`
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 2px solid #2e3148;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ${spin} 0.85s linear infinite;
+`;
+
+const Icon = styled.img`
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 50%;
+  background: #ebf2ff;
+  margin-right: 0.25rem;
+`;
+
+const TokenInfo = styled.div`
+  display: flex;
+  align-items: center;
+  font-size: 1.12rem;
+  font-weight: 500;
+  gap: 0.3rem;
+`;
+
+/* ---------- component ---------- */
+
+export const MintVft100Component: React.FC = () => {
+  const { account } = useAccount();
+  const alert = useAlert();
+  const { api, isApiReady } = useApi();
+
+  const [loading, setLoading] = useState(false);
+  const [decimals, setDecimals] = useState<number | null>(null);
+
+  /* enable extension once */
+  useEffect(() => {
+    void web3Enable('Mint VFT dApp');
+  }, []);
+
+  /* fetch token decimals */
+  useEffect(() => {
+    if (!api || !isApiReady) return;
+
+    const programId =
+      '0xee625c4d51fd369c1b7ece91c26c0ee636fa4bedcb3ed335be6cb6de8f33f9a3';
+    const vftService = new Service(new Program(api, programId));
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const d = await vftService.decimals();
+        if (!cancelled) setDecimals(d);
+      } catch (err) {
+        console.error('Error fetching decimals:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isApiReady]);
+
+  /* mint handler */
+  const handleMint = useCallback(async () => {
+    if (!account) {
+      alert.error('Please connect your wallet first');
+      return;
+    }
+    if (!isApiReady) {
+      alert.error('Node API is not ready');
+      return;
+    }
+    if (decimals === null) {
+      alert.error('Loading token decimals...');
+      return;
+    }
+
+    const programId =
+      '0xee625c4d51fd369c1b7ece91c26c0ee636fa4bedcb3ed335be6cb6de8f33f9a3';
+    const vftService = new Service(new Program(api, programId));
+
+    const amount = BigInt(100) * BigInt(10) ** BigInt(decimals);
+
+    try {
+      const tx: TransactionBuilder<unknown> = vftService.mint(
+        account.decodedAddress,
+        amount
+      );
+
+      setLoading(true);
+
+      const injector = await web3FromSource(account.meta.source);
+      tx.withAccount(account.decodedAddress, { signer: injector.signer });
+
+      await tx.calculateGas();
+
+      const { blockHash, response } = await tx.signAndSend();
+      alert.info(`Transaction included in block ${blockHash}`);
+      await response();
+      alert.success('Successfully minted 100 VFT!');
+    } catch (e) {
+      console.error(e);
+      alert.error('Mint failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [account, api, alert, isApiReady, decimals]);
+
+  return (
+    <MintContainer>
+      <TokenInfo>
+        <Icon src={VARA_NETWORK_ICON} alt="Vara Network" />
+        <span>Network:</span>
+        <span style={{ color: '#3532dd', fontWeight: 600, marginRight: '1rem' }}>
+          Vara
+        </span>
+        <Icon src={VARA_TOKEN_ICON} alt="VFT Token" />
+        <span>VFT Token</span>
+      </TokenInfo>
+
+      <Button disabled={loading || decimals === null} onClick={handleMint}>
+        {loading ? <Spinner /> : <Icon src={VARA_TOKEN_ICON} alt="VFT Token" />}
+        Mint&nbsp;100&nbsp;VFT
+      </Button>
+    </MintContainer>
+  );
+};

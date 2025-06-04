@@ -1,0 +1,138 @@
+// idl example 
+
+type TrafficLightEvent = enum {
+      Green,
+      Yellow,
+      Red,
+    };
+
+    type IoTrafficLightState = struct {
+      current_light: str,
+      all_users: vec struct { actor_id, str },
+    };
+
+    constructor {
+      New : ();
+    };
+
+    service TrafficLight {
+      Green : () -> TrafficLightEvent;
+      Red : () -> TrafficLightEvent;
+      Yellow : () -> TrafficLightEvent;
+      query TrafficLight : () -> IoTrafficLightState;
+    };
+
+
+// client example in ./client.ts
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly trafficLight: TrafficLight;
+
+  constructor(public api: GearApi, private _programId?: `0x${string}`) {
+    const types: Record<string, any> = {
+      TrafficLightEvent: {"_enum":{"Green":"Null","Yellow":"Null","Red":"Null","Nothing":"Null","KeyringError":"KeyringError","SessionCreated":"Null"}},
+      IoTrafficLightState: {"current_light":"String","all_users":"Vec<([u8;32], String)>"},
+    }
+
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+
+    this.trafficLight = new TrafficLight(this);
+  }
+
+  public get programId(): `0x${string}` {
+    if (!this._programId) throw new Error(`Program ID is not set`);
+    return this._programId;
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      'New',
+      'String',
+      'String',
+      code,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`) {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      'New',
+      'String',
+      'String',
+      codeId,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+}
+
+export class Service {
+  constructor(private _program: Program) {}
+
+  public green(): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['TrafficLight', 'Green'],
+      '(String, String)',
+      'TrafficLightEvent',
+      this._program.programId
+    );
+  }
+
+  public red(): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['TrafficLight', 'Red'],
+      '(String, String)',
+      'TrafficLightEvent',
+      this._program.programId
+    );
+  }
+
+  public yellow(): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['TrafficLight', 'Yellow'],
+      '(String, String)',
+      'TrafficLightEvent',
+      this._program.programId
+    );
+  }
+
+
+  public async trafficLight(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<IoTrafficLightState> {
+    const payload = this._program.registry.createType('(String, String)', ['TrafficLight', 'TrafficLight']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, IoTrafficLightState)', reply.payload);
+    return result[2].toJSON() as unknown as IoTrafficLightState;
+  }
+}

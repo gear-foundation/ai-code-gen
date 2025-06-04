@@ -1,0 +1,29 @@
+
+// lib.rs example for DEX Program.
+
+#![no_std]
+
+use sails_rs::prelude::*;
+pub mod services;
+
+use services::service::DexService;
+
+pub struct Program;
+
+#[program]
+impl Program {
+    pub async fn new(
+        token_a: ActorId,
+        token_b: ActorId,
+        liquidity_action_gas: u64,
+        dns_id_and_name: Option<(ActorId, String)>,
+    ) -> Self {
+        DexService::seed(token_a, token_b, liquidity_action_gas, dns_id_and_name).await;
+        Self
+    }
+
+    #[route("DexService")]
+    pub fn dex_service(&self) -> DexService {
+        DexService::new()
+    }
+}

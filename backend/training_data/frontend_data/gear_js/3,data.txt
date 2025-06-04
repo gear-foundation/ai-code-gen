@@ -1,0 +1,109 @@
+
+// to read state for Smart Program with gear-jsexample
+
+import React, { useState, useCallback, useMemo } from 'react';
+import { useAccount, useApi, useAlert } from '@gear-js/react-hooks';
+import { ProgramMetadata } from '@gear-js/api';
+
+export const ReadState: React.FC = () => {
+  const alert = useAlert();
+  const { account } = useAccount();
+  const { api, isApiReady } = useApi();
+
+  const [programState, setProgramState] = useState<unknown>(null);
+  const [loading, setLoading] = useState(false);
+
+  const programId = useMemo<`0x${string}`>(() => '0x...', []);
+  const metadata = useMemo(() => ProgramMetadata.from('00......'), []);
+
+  const isDisabled = !account?.address || !isApiReady || loading;
+
+  const readState = useCallback(async () => {
+    if (!account?.address) {
+      alert.error('No account found');
+      return;
+    }
+    if (!isApiReady) {
+      alert.error('API not ready');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const state = await api!.programState.read(
+        { programId, payload: { SupportedStocks: null } },
+        metadata
+      );
+      const human = state.toHuman?.() || state;
+      setProgramState(human);
+    } catch (err) {
+      console.error('Failed to read state:', err);
+      alert.error('Failed to read state');
+    } finally {
+      setLoading(false);
+    }
+  }, [alert, api, isApiReady, metadata, programId, account?.address]);
+
+  return (
+    <>
+      <style>{`
+        .read-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .btn {
+          padding: 10px 20px;
+          font-size: 1rem;
+          border: 2px solid #333;
+          border-radius: 4px;
+          background: #fff;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) {
+          background-color: #f0f0f0;
+        }
+        .state-box {
+          background: #1a202c;
+          color: #fff;
+          padding: 16px;
+          border-radius: 8px;
+          width: 100%;
+          max-width: 600px;
+          margin-top: 16px;
+        }
+        .state-title {
+          font-size: 1.25rem;
+          margin-bottom: 8px;
+        }
+        .state-content {
+          color: #68d391;
+          font-size: 0.875rem;
+          white-space: pre-wrap;
+        }
+      `}</style>
+
+      <div className="read-container">
+        <button className="btn" onClick={readState} disabled={isDisabled}>
+          {loading ? 'Reading...' : 'Read State'}
+        </button>
+
+        {programState != null && (
+          <div className="state-box">
+            <div className="state-title">📦 State</div>
+            <pre className="state-content">
+              {JSON.stringify(programState, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    </>
+  );
+};

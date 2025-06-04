@@ -1,0 +1,18 @@
+// Reply deposit
+
+// When a program or user sends a reply to a message, it should provide gas for the reply handling. The user replies using gear.sendReply extrinsic. The program uses the msg::reply or msg::reply_with_gas function.
+// Sometimes, it is more convenient to provide gas for the reply handling in advance. For example, if the program sends a message to another program and waits for a reply, it can provide gas for the reply handling in advance. In this case, the program doesn't need to provide gas for the reply handling when it sends a reply.
+// To provide gas for the reply handling in advance, the program should use the exec::reply_deposit function:
+
+let message_id =
+    gstd::msg::send(msg::source(), b"Outgoing message", 0).expect("Failed to send message");
+exec::reply_deposit(message_id, 1_000_000_000).expect("Error during reply deposit");
+
+// The program can deposit gas when using the msg::send_for_reply function by setting the reply_deposit parameter. The reply_deposit parameter is the amount of gas that will be reserved for the reply handling. The reply_deposit parameter is optional. If the reply_deposit parameter is zero, the program should provide gas for the reply handling when it sends a reply.
+
+let message_id = gstd::msg::send_for_reply(
+    msg::source(),
+    b"Outgoing message",
+    0,
+    1_000_000_000,
+).expect("Failed to send message");

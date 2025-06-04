@@ -1,0 +1,376 @@
+#![allow(static_mut_refs)]
+
+use sails_rs::{
+    prelude::*,
+    gstd::{msg, exec},
+    collections::HashMap,
+};
+use extended_vft_client::vft::io as vft_io;
+use sails_rs::calls::ActionIo;
+
+const DECIMALS_FACTOR: u128 = 1_000_000_000_000_000_000_00; // 1e20, for interest rate calculations
+const MIN_COLLATERAL_RATIO: u128 = 150_000_000_000_000_000_000; // 150%, scaled by DECIMALS_FACTOR
+
+static mut LENDING_STATE: Option<LendingState> = None;
+
+/// Possible loan statuses
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum LoanStatus {
+    Active,
+    Closed,
+    Liquidated,
+}
+
+/// Loan position struct
+#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct Loan {
+    pub borrower: ActorId,
+    pub collateral: u128,
+    pub principal: u128,
+    pub interest_rate: u128, // per year, in DECIMALS_FACTOR units
+    pub start_block: u64,
+    pub status: LoanStatus,
+}
+
+/// Lending state struct
+#[derive(Debug, Clone, Default)]
+pub struct LendingState {
+    pub owner: ActorId,
+    pub collateral_token: ActorId,
+    pub debt_token: ActorId,
+    pub base_interest_rate: u128,    // e.g. 5_000_000_000_000_000_000 = 5%, scaled
+    pub min_loan: u128,
+    pub max_loan: u128,
+    pub next_loan_id: u64,
+    pub loans: HashMap<u64, Loan>,
+    pub user_loans: HashMap<ActorId, Vec<u64>>,
+    pub total_collateral: u128,
+    pub total_principal: u128,
+}
+
+impl LendingState {
+    pub fn init(
+        owner: ActorId,
+        collateral_token: ActorId,
+        debt_token: ActorId,
+        base_interest_rate: u128,
+        min_loan: u128,
+        max_loan: u128,
+    ) {
+        unsafe {
+            LENDING_STATE = Some(Self {
+                owner,
+                collateral_token,
+                debt_token,
+                base_interest_rate,
+                min_loan,
+                max_loan,
+                ..Default::default()
+            })
+        }
+    }
+    pub fn state_mut() -> &'static mut LendingState {
+        let s = unsafe { LENDING_STATE.as_mut() };
+        debug_assert!(s.is_some(), "State not initialized");
+        unsafe { s.unwrap_unchecked() }
+    }
+    pub fn state_ref() -> &'static LendingState {
+        let s = unsafe { LENDING_STATE.as_ref() };
+        debug_assert!(s.is_some(), "State not initialized");
+        unsafe { s.unwrap_unchecked() }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum LendingEvent {
+    LoanOpened {
+        loan_id: u64,
+        borrower: ActorId,
+        collateral: u128,
+        principal: u128,
+    },
+    Repaid {
+        loan_id: u64,
+        borrower: ActorId,
+    },
+    Liquidated {
+        loan_id: u64,
+        borrower: ActorId,
+    },
+    OwnerSet(ActorId),
+    ParamsUpdated,
+}
+
+#[derive(Debug, Encode, Decode, TypeInfo, Clone)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct IoLendingState {
+    pub owner: ActorId,
+    pub collateral_token: ActorId,
+    pub debt_token: ActorId,
+    pub base_interest_rate: u128,
+    pub min_loan: u128,
+    pub max_loan: u128,
+    pub loans: Vec<(u64, Loan)>,
+    pub user_loans: Vec<(ActorId, Vec<u64>)>,
+    pub total_collateral: u128,
+    pub total_principal: u128,
+}
+
+impl From<LendingState> for IoLendingState {
+    fn from(state: LendingState) -> Self {
+        IoLendingState {
+            owner: state.owner,
+            collateral_token: state.collateral_token,
+            debt_token: state.debt_token,
+            base_interest_rate: state.base_interest_rate,
+            min_loan: state.min_loan,
+            max_loan: state.max_loan,
+            loans: state.loans.iter().map(|(&id, loan)| (id, loan.clone())).collect(),
+            user_loans: state.user_loans.iter().map(|(&id, v)| (id, v.clone())).collect(),
+            total_collateral: state.total_collateral,
+            total_principal: state.total_principal,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct Service;
+
+impl Service {
+    /// Initialize lending contract
+    pub fn seed(
+        collateral_token: ActorId,
+        debt_token: ActorId,
+        base_interest_rate: u128,
+        min_loan: u128,
+        max_loan: u128,
+    ) {
+        if collateral_token == ActorId::zero() || debt_token == ActorId::zero() {
+            panic!("Token addresses cannot be zero");
+        }
+        if min_loan == 0 || max_loan == 0 || max_loan < min_loan {
+            panic!("Loan thresholds invalid");
+        }
+        LendingState::init(
+            msg::source(),
+            collateral_token,
+            debt_token,
+            base_interest_rate,
+            min_loan,
+            max_loan,
+        );
+    }
+}
+
+#[sails_rs::service(events = LendingEvent)]
+impl Service {
+    pub fn new() -> Self { Self }
+
+    /// Open a new loan, sending collateral to contract, and receive principal back
+    pub async fn open_loan(&mut self, collateral: u128, principal: u128) -> LendingEvent {
+        let msg_src = msg::source();
+        let mut state = LendingState::state_mut();
+
+        // Validate input
+        if principal < state.min_loan || principal > state.max_loan {
+            panic!("Loan principal out of bounds");
+        }
+        if collateral == 0 {
+            panic!("Must provide collateral");
+        }
+        // Ensure user is not borrowing too much (collateral ratio)
+        let ratio = collateral
+            .saturating_mul(DECIMALS_FACTOR)
+            .checked_div(principal)
+            .expect("Division error");
+        if ratio < MIN_COLLATERAL_RATIO {
+            panic!("Insufficient collateral ratio");
+        }
+
+        // Transfer collateral from user to contract
+        let transfer_from = vft_io::TransferFrom::encode_call(msg_src, exec::program_id(), collateral.into());
+        msg::send_bytes_with_gas_for_reply(state.collateral_token, transfer_from, 5_000_000_000, 0, 0)
+            .expect("Collateral transfer failed")
+            .await
+            .expect("No reply for collateral transfer");
+
+
+        // Transfer principal debt tokens to user
+        let request = vft_io::TransferFrom::encode_call(exec::program_id(), msg_src, principal.into());
+        msg::send_bytes_with_gas_for_reply(state.debt_token, request, 5_000_000_000, 0, 0)
+            .expect("Debt mint failed")
+            .await
+            .expect("No reply for mint");
+
+        let loan_id = state.next_loan_id;
+        let block = exec::block_timestamp();
+
+        let loan = Loan {
+            borrower: msg_src,
+            collateral,
+            principal,
+            interest_rate: state.base_interest_rate,
+            start_block: block,
+            status: LoanStatus::Active,
+        };
+        state.loans.insert(loan_id, loan);
+        let user_loans = state.user_loans.entry(msg_src).or_default();
+        if user_loans.len() >= 100 {
+            panic!("User loan limit reached");
+        }
+        user_loans.push(loan_id);
+        state.next_loan_id = state.next_loan_id.checked_add(1).expect("Loan id overflow");
+        state.total_collateral = state.total_collateral.checked_add(collateral).expect("Collateral overflow");
+        state.total_principal = state.total_principal.checked_add(principal).expect("Principal overflow");
+
+        self.emit_event(LendingEvent::LoanOpened {
+            loan_id,
+            borrower: msg_src,
+            collateral,
+            principal,
+        }).expect("Event error");
+
+        LendingEvent::LoanOpened {
+            loan_id,
+            borrower: msg_src,
+            collateral,
+            principal,
+        }
+    }
+
+    /// Repay a loan (with accrued interest). Burns debt tokens, returns collateral
+    pub async fn repay(&mut self, loan_id: u64) -> LendingEvent {
+        let msg_src = msg::source();
+        let mut state = LendingState::state_mut();
+        let loan = state.loans.get_mut(&loan_id).expect("No such loan");
+        if loan.borrower != msg_src {
+            panic!("Not loan owner");
+        }
+        if loan.status != LoanStatus::Active {
+            panic!("Loan not active");
+        }
+
+        let current_block = exec::block_timestamp();
+        let duration = current_block.checked_sub(loan.start_block).expect("Block underflow") as u128;
+        let interest = loan
+            .principal
+            .checked_mul(loan.interest_rate).expect("Interest overflow")
+            .checked_mul(duration).expect("Interest overflow")
+            .checked_div(31_536_000u128).unwrap_or(0)
+            .checked_div(DECIMALS_FACTOR).unwrap_or(0);
+
+        let total_owed = loan.principal.checked_add(interest).expect("Total owed overflow");
+
+        // Burn debt tokens from user
+        let request = vft_io::Burn::encode_call(msg_src, total_owed.into());
+        msg::send_bytes_with_gas_for_reply(state.debt_token, request, 5_000_000_000, 0, 0)
+            .expect("Debt burn failed")
+            .await
+            .expect("No reply for burn");
+
+        // Transfer collateral back to user
+        let request = vft_io::Transfer::encode_call(msg_src, loan.collateral.into());
+        msg::send_bytes_with_gas_for_reply(state.collateral_token, request, 5_000_000_000, 0, 0)
+            .expect("Collateral transfer failed")
+            .await
+            .expect("No reply transfer");
+
+        state.total_collateral = state.total_collateral.checked_sub(loan.collateral).expect("Collateral underflow");
+        state.total_principal = state.total_principal.checked_sub(loan.principal).expect("Principal underflow");
+        loan.status = LoanStatus::Closed;
+
+        self.emit_event(LendingEvent::Repaid {
+            loan_id,
+            borrower: msg_src,
+        }).expect("Event error");
+
+        LendingEvent::Repaid {
+            loan_id,
+            borrower: msg_src,
+        }
+    }
+
+    /// Liquidate undercollateralized loans (publicly callable)
+    pub async fn liquidate(&mut self, loan_id: u64) -> LendingEvent {
+        let mut state = LendingState::state_mut();
+        let loan = state.loans.get_mut(&loan_id).expect("No loan");
+        if loan.status != LoanStatus::Active {
+            panic!("Loan not active");
+        }
+
+        let ratio = loan.collateral
+            .saturating_mul(DECIMALS_FACTOR)
+            .checked_div(loan.principal.max(1))
+            .expect("Division error");
+        if ratio >= MIN_COLLATERAL_RATIO {
+            panic!("Loan safe; can't liquidate");
+        }
+
+        // Transfer collateral to contract owner as liquidator bonus
+        let request = vft_io::Transfer::encode_call(state.owner, loan.collateral.into());
+        msg::send_bytes_with_gas_for_reply(state.collateral_token, request, 5_000_000_000, 0, 0)
+            .expect("Collateral to owner failed")
+            .await
+            .expect("No reply on transfer");
+
+        state.total_collateral = state.total_collateral.checked_sub(loan.collateral).expect("Collateral underflow");
+        state.total_principal = state.total_principal.checked_sub(loan.principal).expect("Principal underflow");
+        loan.status = LoanStatus::Liquidated;
+
+        self.emit_event(LendingEvent::Liquidated {
+            loan_id,
+            borrower: loan.borrower,
+        }).expect("Event error");
+
+        LendingEvent::Liquidated {
+            loan_id,
+            borrower: loan.borrower,
+        }
+    }
+
+    /// Set new owner (admin)
+    pub fn set_owner(&mut self, new_owner: ActorId) -> LendingEvent {
+        let mut state = LendingState::state_mut();
+        if msg::source() != state.owner {
+            panic!("Not owner");
+        }
+        state.owner = new_owner;
+        self.emit_event(LendingEvent::OwnerSet(new_owner)).expect("Event err");
+        LendingEvent::OwnerSet(new_owner)
+    }
+
+    /// Update parameters (owner only)
+    pub fn update_params(&mut self, new_rate: u128, min_loan: u128, max_loan: u128) -> LendingEvent {
+        let mut state = LendingState::state_mut();
+        if msg::source() != state.owner {
+            panic!("Not owner");
+        }
+        state.base_interest_rate = new_rate;
+        state.min_loan = min_loan;
+        state.max_loan = max_loan;
+        self.emit_event(LendingEvent::ParamsUpdated).expect("Event err");
+        LendingEvent::ParamsUpdated
+    }
+
+    /// Query: get loan by id
+    pub fn query_loan(&self, loan_id: u64) -> Option<Loan> {
+        LendingState::state_ref().loans.get(&loan_id).cloned()
+    }
+
+    /// Query: all user loans
+    pub fn query_user_loans(&self, user: ActorId) -> Vec<u64> {
+        LendingState::state_ref().user_loans.get(&user).cloned().unwrap_or_default()
+    }
+
+    /// Query: contract-wide state
+    pub fn query_state(&self) -> IoLendingState {
+        LendingState::state_ref().clone().into()
+    }
+}

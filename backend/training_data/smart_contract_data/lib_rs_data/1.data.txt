@@ -1,0 +1,195 @@
+
+// lib.rs example for Hello world contract
+
+#![no_std]
+
+// necesary crates
+use sails_rs::prelude::*;
+
+pub mod services;
+
+// Import service to be used for the program
+use services::service::Service;
+
+pub struct Program;
+
+#[program]
+impl Program {
+    // Application constructor (it is an associated function)
+    // It can be called once per application lifetime.
+    pub fn new() -> Self {
+        // Init the state
+        Service::seed();
+
+        Self
+    }
+
+    
+    #[route("Service")]
+    pub fn service_svc(&self) -> Service {
+        Service::new()
+    }
+}
+
+
+// service.rs example for Hello world contract
+
+#![no_std]
+#![allow(static_mut_refs)]
+
+use sails_rs::{
+    prelude::*,
+    gstd::msg,
+    collections::HashMap,
+};
+
+// State of the contract
+pub static mut STATE: Option<State> = None;
+
+// Struct representing the contract state
+#[derive(Clone, Default)]
+pub struct State {
+    pub admins: Vec<ActorId>,
+    pub users: HashMap<ActorId, String>,
+    pub events: HashMap<ActorId, EventDetails>,
+}
+
+// Struct representing event details
+#[derive(Encode, Decode, TypeInfo, Default, Clone)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct EventDetails {
+    pub creator: ActorId,
+    pub description: String,
+    pub active: bool,
+}
+
+// Implementation block for State
+impl State {
+    // Initialize the state
+    pub fn init_state() {
+        unsafe {
+            STATE = Some(Self::new());
+        };
+    }
+
+    // Create a new state instance
+    pub fn new() -> Self {
+        Self { ..Default::default() }
+    }
+
+    // Get mutable state
+    pub fn state_mut() -> &'static mut State {
+        let state = unsafe { STATE.as_mut() };
+        debug_assert!(state.is_some(), "State is not initialized");
+        unsafe { state.unwrap_unchecked() }
+    }
+
+    // Get immutable state
+    pub fn state_ref() -> &'static State {
+        let state = unsafe { STATE.as_ref() };
+        debug_assert!(state.is_some(), "State is not initialized");
+        unsafe { state.unwrap_unchecked() }
+    }
+}
+
+// Struct representing IoState for querying
+#[derive(Encode, Decode, TypeInfo, Default)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct IoState {
+    pub admins: Vec<ActorId>,
+    pub users: Vec<(ActorId, String)>,
+    pub events: Vec<(ActorId, EventDetails)>,
+}
+
+// Convert State to IoState
+impl From<State> for IoState {
+    fn from(value: State) -> Self {
+        let State { admins, users, events } = value;
+        let users = users.into_iter().collect();
+        let events = events.into_iter().collect();
+
+        Self { admins, users, events }
+    }
+}
+
+// Struct representing service logic
+#[derive(Default)]
+pub struct Service;
+
+// Implementation for Service struct
+impl Service {
+    pub fn seed() {
+        State::init_state();
+    }
+}
+
+// Implementation for service logic
+#[service]
+impl Service {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn create_event(&mut self, creator: ActorId, description: String) -> Events {
+        let state = State::state_mut();
+        
+        if state.admins.contains(&msg::source()) {
+            state.events.insert(creator, EventDetails {
+                creator,
+                description,
+                active: true,
+            });
+            Events::EventCreated(creator)
+        } else {
+            Events::Error(Errors::Unauthorized)
+        }
+    }
+
+    pub fn close_event(&mut self, creator: ActorId) -> Events {
+        let state = State::state_mut();
+        
+        if let Some(event) = state.events.get_mut(&creator) {
+            event.active = false;
+            Events::EventClosed(creator)
+        } else {
+            Events::Error(Errors::EventNotFound)
+        }
+    }
+
+    pub fn register_user(&mut self, user: ActorId, name: String) -> Events {
+        let state = State::state_mut();
+        
+        if state.admins.contains(&msg::source()) {
+            state.users.insert(user, name.clone());
+            Events::UserRegistered(user, name)
+        } else {
+            Events::Error(Errors::Unauthorized)
+        }
+    }
+
+    pub fn query_state(&self) -> IoState {
+        State::state_ref().to_owned().into()
+    }
+}
+
+// Struct representing service events
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum Events {
+    EventCreated(ActorId),
+    EventClosed(ActorId),
+    UserRegistered(ActorId, String),
+    Error(Errors),
+}
+
+// Enum representing possible errors
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum Errors {
+    Unauthorized,
+    EventNotFound,
+}

@@ -1,0 +1,137 @@
+
+// to send message for Smart Program with gear-js
+
+import React, { useState, useCallback, useMemo } from 'react';
+import { useAccount, useApi, useAlert } from '@gear-js/react-hooks';
+import { web3Enable, web3FromSource } from '@polkadot/extension-dapp';
+import { ProgramMetadata } from '@gear-js/api';
+import { ReadState } from './ReadState';
+
+// Props type
+type OpenOperationProps = {
+  stock: string;
+  investmentVara: number;
+  investmentDolar: number;
+  openPrice: number;
+  type: boolean;
+  leverage: number;
+  isDisable: boolean;
+};
+
+export const OpenOperation: React.FC<OpenOperationProps> = ({
+  stock,
+  investmentVara,
+  investmentDolar,
+  openPrice,
+  type,
+  leverage,
+  isDisable,
+}) => {
+  const alert = useAlert();
+  const { account } = useAccount();
+  const { api, isApiReady } = useApi();
+  const [loading, setLoading] = useState(false);
+
+  // Memoized program ID and metadata
+  const programId = useMemo<`0x${string}`>(() => '0x..', []);
+  const metadata = useMemo(() => ProgramMetadata.from('00....'), []);
+
+  // Button disable logic
+  const isDisabledAll = isDisable || !account?.address || !isApiReady || loading;
+
+  // Send transaction
+  const handleInvest = useCallback(async () => {
+    if (!account?.address) {
+      alert.error('No account found');
+      return;
+    }
+    if (!isApiReady) {
+      alert.error('API not ready');
+      return;
+    }
+    setLoading(true);
+    try {
+      const extensions = await web3Enable('stockEx');
+      if (extensions.length === 0) {
+        alert.error('No wallet extension found');
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const message = {
+        destination: programId,
+        payload: {
+          OpenOperation: {
+            ticker_symbol: stock,
+            operation_type: type,
+            investment: investmentDolar,
+            open_price: openPrice,
+            leverage: leverage,
+            date: now,
+          },
+        },
+        gasLimit: 9_999_999_245,
+        value: investmentVara,
+      };
+
+      const extrinsic = await api!.message.send(message, metadata);
+      const injector = await web3FromSource(account.meta.source);
+
+      await extrinsic.signAndSend(
+        account.address,
+        { signer: injector.signer },
+        ({ status }) => {
+          if (status.isInBlock) alert.success('Transaction included in block');
+          if (status.isFinalized) alert.success('Transaction finalized');
+        }
+      );
+    } catch (error) {
+      console.error('Transaction failed', error);
+      alert.error('Transaction failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [account, api, alert, isApiReady, stock, investmentDolar, openPrice, type, leverage, investmentVara, programId, metadata]);
+
+  return (
+    <>
+      <style>{`
+        .open-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 1rem;
+          padding: 16px;
+        }
+        .btn {
+          padding: 10px 20px;
+          font-size: 1rem;
+          border: 2px solid #333;
+          border-radius: 4px;
+          background: #fff;
+          cursor: pointer;
+          transition: background-color 0.2s, opacity 0.2s;
+        }
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) {
+          background-color: #f0f0f0;
+        }
+      `}</style>
+
+      <div className="open-container">
+        <button
+          className="btn"
+          onClick={handleInvest}
+          disabled={isDisabledAll}
+        >
+          {loading ? 'Processing...' : 'Invest Now!'}
+        </button>
+        <ReadState />
+      </div>
+    </>
+  );
+};
+

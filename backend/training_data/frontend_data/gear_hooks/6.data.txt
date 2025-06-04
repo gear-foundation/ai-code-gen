@@ -1,0 +1,201 @@
+
+
+// React component example using @gear-js/react-hooks
+
+import React, { useState, useCallback } from 'react';
+import { useProgram, useSendProgramTransaction, useAlert } from '@gear-js/react-hooks';
+import { Program } from './lib';
+
+type TxResult = {
+  msgId: string;
+  txHash: string;
+  blockHash: string;
+  isFinalized: Promise<boolean>;
+  response: (rawResult?: boolean) => Promise<unknown>;
+};
+
+export const MintVFT: React.FC = () => {
+  const [address, setAddress] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const alert = useAlert();
+
+  const { data: program } = useProgram({
+    library: Program,
+    id: '0x...',
+  });
+
+  const { sendTransactionAsync } = useSendProgramTransaction({
+    program,
+    serviceName: 'vft',
+    functionName: 'mint',
+  });
+
+  const handleMint = useCallback(async () => {
+    if (!address) return;
+    setIsLoading(true);
+    const loadingId = alert.loading(
+      '⏳ Sending mint transaction...',
+      { title: 'Transaction in progress', timeout: 10000 }
+    );
+
+    try {
+      const result = await sendTransactionAsync({
+        args: [address, 100_000000000000000000n],
+      });
+
+      const txResult = await result.result as TxResult;
+      const isFinalized = await txResult.isFinalized;
+
+      if (isFinalized) {
+        const txLink = `https://vara.subscan.io/extrinsic/${txResult.txHash}`;
+        alert.success(
+          <div style={{ fontSize: '14px', lineHeight: '1.6', fontFamily: 'system-ui' }}>
+            <strong style={{ display: 'block', marginBottom: '6px' }}>✅ Mint Successful!</strong>
+
+            <div style={{ marginBottom: '4px' }}>
+              <span style={{ fontWeight: 500 }}>📦 TxHash:</span>
+              <code style={{ fontFamily: 'monospace', fontSize: '13px', marginLeft: 6 }}>
+                {txResult.txHash}
+              </code>
+            </div>
+
+            <div style={{ marginBottom: '4px' }}>
+              <span style={{ fontWeight: 500 }}>🔗 BlockHash:</span>
+              <code style={{ fontFamily: 'monospace', fontSize: '13px', marginLeft: 6 }}>
+                {txResult.blockHash}
+              </code>
+            </div>
+
+            <div style={{ marginTop: '8px' }}>
+              <a
+                href={txLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  marginTop: '6px',
+                  background: '#3b82f6',
+                  color: 'white',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  textDecoration: 'none',
+                }}
+              >
+                🔍 View on Explorer
+              </a>
+            </div>
+          </div>,
+          {
+            timeout: 12000,
+            title: 'Transaction Finalized',
+          }
+        );
+      } else {
+        alert.error(
+          `⚠️ Transaction not finalized.\nTx: ${txResult.txHash}`,
+          { title: 'Not finalized' }
+        );
+      }
+    } catch (error) {
+      console.error('Mint error:', error);
+      alert.error('❌ Failed to mint tokens. Check console for details.', {
+        title: 'Transaction error',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [address, sendTransactionAsync, alert]);
+
+  return (
+    <>
+      <style>{`
+        .mint-container {
+          max-width: 420px;
+          margin: 2rem auto;
+          padding: 24px;
+          border: 2px solid #e2e8f0;
+          border-radius: 10px;
+          background: #f9fafb;
+          font-family: 'Segoe UI', sans-serif;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .mint-header {
+          display: flex;
+          align-items: center;
+          margin-bottom: 20px;
+        }
+        .mint-header h2 {
+          margin: 0;
+          font-size: 1.5rem;
+          color: #2d3748;
+        }
+        .mint-input {
+          width: 100%;
+          padding: 10px;
+          border-radius: 6px;
+          border: 1px solid #cbd5e0;
+          margin-top: 8px;
+          margin-bottom: 20px;
+          font-size: 0.95rem;
+        }
+        .mint-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          font-size: 1rem;
+          border-radius: 6px;
+          border: none;
+          background: linear-gradient(90deg, #4f46e5, #6366f1);
+          color: white;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .mint-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.7;
+        }
+        .mint-btn:hover:not(:disabled) {
+          background: linear-gradient(90deg, #4338ca, #4f46e5);
+        }
+      `}</style>
+
+      <div className="mint-container">
+        <div className="mint-header">
+          <img
+            src="https://img.cryptorank.io/coins/vara_network1695313579900.png"
+            alt="Vara Network"
+            style={{ width: 40, height: 40, marginRight: 12 }}
+          />
+          <h2>Mint VFT Tokens</h2>
+        </div>
+
+        <label style={{ fontWeight: 600, color: '#2d3748' }}>
+          Recipient address:
+          <input
+            type="text"
+            className="mint-input"
+            placeholder="0x..."
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+        </label>
+
+        <button
+          type="button"
+          className="mint-btn"
+          onClick={handleMint}
+          disabled={!address || isLoading}
+        >
+          {isLoading ? 'Minting...' : 'Mint 100'}
+          <img
+            src="https://s2.coinmarketcap.com/static/img/coins/200x200/28067.png"
+            alt="Vara Token"
+            style={{ width: 22, height: 22 }}
+          />
+        </button>
+      </div>
+    </>
+  );
+};

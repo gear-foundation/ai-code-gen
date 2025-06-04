@@ -1,0 +1,576 @@
+
+// idl example
+
+type Events = enum {
+  Initialized,
+  EnergySourceAdded: struct { str, u64 },
+  EnergyGenerated: struct { str, u64 },
+  Error: str,
+};
+
+type IoState = struct {
+  configured: bool,
+  energy_sources: vec struct { str, u64 },
+  total_energy_generated: u64,
+};
+
+constructor {
+  New : ();
+};
+
+service Service {
+  AddEnergySource : (source: str, capacity: u64) -> Events;
+  GenerateEnergy : (source: str, energy: u64) -> Events;
+  Initialize : (energy_sources: vec struct { str, u64 }) -> Events;
+  query QueryState : () -> IoState;
+};
+
+// client example in ./client.ts
+
+import { TransactionBuilder, ActorId } from 'sails-js';
+import { GearApi, decodeAddress } from '@gear-js/api';
+import { TypeRegistry } from '@polkadot/types';
+
+type Events = {
+  Initialized?: {};
+  EnergySourceAdded?: { source: string; capacity: number };
+  EnergyGenerated?: { source: string; energy: number };
+  Error?: string;
+};
+
+type IoState = {
+  configured: boolean;
+  energy_sources: { source: string; capacity: number }[];
+  total_energy_generated: number;
+};
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly service: Service;
+
+  constructor(public api: GearApi, public programId?: `0x${string}`) {
+    const types: Record<string, any> = {
+      Events: {
+        _enum: {
+          Initialized: 'Null',
+          EnergySourceAdded: '(String, u64)',
+          EnergyGenerated: '(String, u64)',
+          Error: 'String',
+        },
+      },
+      IoState: {
+        configured: 'bool',
+        energy_sources: 'Vec<(String, u64)>',
+        total_energy_generated: 'u64',
+      },
+    };
+
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+
+    this.service = new Service(this);
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      ['New'],
+      '(String)',
+      'String',
+      code,
+    );
+
+    this.programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`) {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      ['New'],
+      '(String)',
+      'String',
+      codeId,
+    );
+
+    this.programId = builder.programId;
+    return builder;
+  }
+}
+
+
+export class Service {
+  constructor(private _program: Program) { }
+
+  public addEnergySource(source: string, capacity: number | string | bigint): TransactionBuilder<Events> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<Events>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'AddEnergySource', source, capacity],
+      '(String, String, String, U64)',
+      'Events',
+      this._program.programId
+    );
+  }
+
+  public generateEnergy(source: string, energy: number | string | bigint): TransactionBuilder<Events> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<Events>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'GenerateEnergy', source, energy],
+      '(String, String, String, U64)',
+      'Events',
+      this._program.programId
+    );
+  }
+
+  public initialize(energySources: Array<[string, number | string | bigint]>): TransactionBuilder<Events> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<Events>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'Initialize', energySources],
+      '(String, String, Vec<(String, U64)>)',
+      'Events',
+      this._program.programId
+    );
+  }
+
+  public async queryState(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<IoState> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'QueryState']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock || null,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, {"configured":"bool","energy_sources":"Vec<{"str":"String","u64":"U64"}>","total_energy_generated":"U64"})', reply.payload);
+    return result[2].toJSON() as unknown as IoState;
+  }
+}
+
+
+// React Component example with sails.js
+
+import React, { useState, useCallback, useEffect } from 'react';
+import styled, { keyframes } from 'styled-components';
+import { useAccount, useAlert, useApi } from '@gear-js/react-hooks';
+import { web3Enable, web3FromSource } from '@polkadot/extension-dapp';
+import { TransactionBuilder } from 'sails-js';
+import { Program, Service } from './lib';
+
+/* ------------------------------------------------------------------ */
+/* types & constants                                                   */
+/* ------------------------------------------------------------------ */
+
+type Method = 'AddEnergySource' | 'GenerateEnergy' | 'Initialize';
+
+interface EnergySource {
+  0: string;   // name
+  1: number;   // capacity
+}
+
+interface GridState {
+  configured: boolean;
+  energy_sources: EnergySource[];
+  total_energy_generated: number;
+}
+
+const VARA_ICON       = 'https://img.cryptorank.io/coins/vara_network1695313579900.png';
+const VARA_TOKEN_ICON = 'https://s2.coinmarketcap.com/static/img/coins/200x200/28067.png';
+
+const PROGRAM_ID ='0x4d6da6d1b2ad2bf948a963dde9673075fb6a450f73e48ed0ad63407dbc53fe20' ;
+
+/* ------------------------------------------------------------------ */
+/* styled components                                                   */
+/* ------------------------------------------------------------------ */
+
+const spin = keyframes`to { transform: rotate(360deg); }`;
+
+const Container = styled.div`
+  max-width: 540px;
+  margin: 2rem auto;
+  background: #f8f8fa;
+  border-radius: 1rem;
+  box-shadow: 0 2px 12px rgba(34, 34, 68, 0.07);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+`;
+
+const HeadLine = styled.h2`
+  display: flex;
+  align-items: center;
+  font-size: 1.55rem;
+  font-weight: 600;
+  gap: 0.75rem;
+  color: #22223b;
+  margin: 0 0 0.5rem 0;
+`;
+
+const VaraImg = styled.img`
+  width: 2rem;
+  height: 2rem;
+  vertical-align: middle;
+`;
+
+const TokenStatus = styled.div`
+  background: #fff;
+  border-radius: 0.5rem;
+  padding: 1rem 1.5rem;
+  border: 1.5px solid #dedede;
+  font-size: 1rem;
+`;
+
+const SubTitle = styled.div`
+  font-weight: 500;
+  color: #8785a2;
+  margin-bottom: 0.3rem;
+`;
+
+const InputRow = styled.div`
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+  align-items: center;
+`;
+
+const Input = styled.input<{ width?: string }>`
+  font-size: 1rem;
+  padding: 0.5rem 0.85rem;
+  border: 1.5px solid #d4d4d8;
+  border-radius: 0.37rem;
+  background: #fff;
+  outline: none;
+  min-width: ${({ width }) => width || '8rem'};
+  flex: 1;
+`;
+
+const Button = styled.button<{ disabled?: boolean }>`
+  position: relative;
+  padding: 0.65rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: 2px solid #3f3867;
+  border-radius: 0.25rem;
+  background: #f6f7fb;
+  color: #403880;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.2s;
+
+  &:hover   { background: ${({ disabled }) => (disabled ? '#f6f7fb' : '#eceaf4')}; }
+  &:active  { background: ${({ disabled }) => (disabled ? '#f6f7fb' : '#e7e6f0')}; }
+
+  ${({ disabled }) => disabled && 'opacity: 0.54; cursor: not-allowed;'}
+`;
+
+const Spinner = styled.div`
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #3f3867;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ${spin} 0.8s linear infinite;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+`;
+
+/* ------------------------------------------------------------------ */
+/* main component                                                      */
+/* ------------------------------------------------------------------ */
+
+export const EnergyGridComponent: React.FC = () => {
+  const { account }        = useAccount();
+  const alert              = useAlert();
+  const { api, isApiReady} = useApi();
+
+  const [loading, setLoading] = useState<Method | null>(null);
+  const [grid, setGrid]       = useState<GridState | null>(null);
+
+  /* Form inputs */
+  const [addSource, setAddSource] = useState({ source: '', capacity: '' });
+  const [genEnergy, setGenEnergy] = useState({ source: '', energy: '' });
+  const [initSources, setInitSources] = useState([{ source: '', capacity: '' }]);
+
+  /* Enable extension once */
+  useEffect(() => { void web3Enable('Energy Grid dApp'); }, []);
+
+  /* Query on‑chain state */
+  const fetchState = useCallback(async () => {
+    if (!isApiReady) return;
+    try {
+      const svc = new Service(new Program(api, PROGRAM_ID));
+      const st  = await svc.queryState();
+      setGrid(st as GridState);
+    } catch {
+      setGrid(null);
+    }
+  }, [api, isApiReady]);
+
+  useEffect(() => { void fetchState(); }, [fetchState]);
+
+  /* ---------------------------------------------------------------- */
+  /* transaction helper                                               */
+  /* ---------------------------------------------------------------- */
+
+  const sendTx = useCallback(
+    async (tx: TransactionBuilder<unknown>, m: Method, refetch = true) => {
+      try {
+        const { signer } = await web3FromSource(account!.meta.source);
+        tx.withAccount(account!.decodedAddress, { signer });
+
+        await tx.calculateGas();
+        const { blockHash, response } = await tx.signAndSend();
+
+        alert.info(`Included in block ${blockHash}`);
+        await response();
+        alert.success(`${m} succeeded`);
+        if (refetch) setTimeout(() => { void fetchState(); }, 1200);
+      } catch (err) {
+        console.error(err);
+        alert.error(`${m} failed`);
+      } finally {
+        setLoading(null);
+      }
+    },
+    [account, alert, fetchState]
+  );
+
+  /* ---------------------------------------------------------------- */
+  /* Handlers                                                         */
+  /* ---------------------------------------------------------------- */
+
+  const handleAddSource = async () => {
+    if (!api || !isApiReady) return alert.error('Node API not ready');
+    if (!account)            return alert.error('Connect your wallet first');
+
+    const { source, capacity } = addSource;
+    if (!source.trim() || !capacity) return alert.error('Fill in all fields');
+
+    try {
+      const svc = new Service(new Program(api, PROGRAM_ID));
+      setLoading('AddEnergySource');
+      await sendTx(svc.addEnergySource(source.trim(), BigInt(capacity)), 'AddEnergySource');
+      setAddSource({ source: '', capacity: '' });
+    } catch {
+      alert.error('Failed to build transaction');
+      setLoading(null);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!api || !isApiReady) return alert.error('Node API not ready');
+    if (!account)            return alert.error('Connect your wallet first');
+
+    const { source, energy } = genEnergy;
+    if (!source.trim() || !energy) return alert.error('Fill in all fields');
+
+    try {
+      const svc = new Service(new Program(api, PROGRAM_ID));
+      setLoading('GenerateEnergy');
+      await sendTx(svc.generateEnergy(source.trim(), BigInt(energy)), 'GenerateEnergy');
+      setGenEnergy({ source: '', energy: '' });
+    } catch {
+      alert.error('Failed to build transaction');
+      setLoading(null);
+    }
+  };
+
+  const handleInitialize = async () => {
+    if (!api || !isApiReady) return alert.error('Node API not ready');
+    if (!account)            return alert.error('Connect your wallet first');
+
+    const entries = initSources
+      .filter(s => s.source && s.capacity)
+      .map(s => [s.source.trim(), BigInt(s.capacity)] as [string, bigint]);
+
+    if (!entries.length) return alert.error('Specify at least one energy source');
+
+    try {
+      const svc = new Service(new Program(api, PROGRAM_ID));
+      setLoading('Initialize');
+      await sendTx(svc.initialize(entries), 'Initialize');
+      setInitSources([{ source: '', capacity: '' }]);
+    } catch {
+      alert.error('Failed to build transaction');
+      setLoading(null);
+    }
+  };
+
+  /* ---------------------------------------------------------------- */
+
+  return (
+    <Container>
+      <HeadLine>
+        <VaraImg src={VARA_ICON} alt="Vara" />
+        Vara Network Community Energy Grid
+      </HeadLine>
+
+      {/* ---------- GRID STATUS ---------- */}
+      <TokenStatus>
+        <SubTitle>
+          <VaraImg src={VARA_TOKEN_ICON} style={{ width: '1.28rem', height: '1.28rem' }} />
+          &nbsp; Grid State
+        </SubTitle>
+
+        {grid ? (
+          <div>
+            <div>Configured:&nbsp;<b>{grid.configured ? 'Yes' : 'No'}</b></div>
+            <div>Total Energy Generated:&nbsp;
+              <b>{grid.total_energy_generated.toLocaleString()}</b>
+            </div>
+            <div style={{ margin: '0.5rem 0 0.1rem 0' }}>Sources:</div>
+            <ul style={{ paddingLeft: '1.4em', margin: 0 }}>
+              {grid.energy_sources.length === 0 && (
+                <li style={{ color: '#bd93f9' }}>No sources yet</li>
+              )}
+              {grid.energy_sources.map((s, i) => (
+                <li key={i}>
+                  <b>{s[0]}</b> — capacity: {s[1].toLocaleString()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <span>Loading…</span>
+        )}
+      </TokenStatus>
+
+      {/* ---------- ADD SOURCE ---------- */}
+      <div>
+        <SubTitle>Add New Energy Source</SubTitle>
+        <InputRow>
+          <Input
+            width="10rem"
+            placeholder="Source Name"
+            value={addSource.source}
+            onChange={e => setAddSource(v => ({ ...v, source: e.target.value }))}
+            disabled={loading === 'AddEnergySource'}
+          />
+          <Input
+            width="8rem"
+            placeholder="Capacity"
+            type="number"
+            min={0}
+            value={addSource.capacity}
+            onChange={e => setAddSource(v => ({ ...v, capacity: e.target.value }))}
+            disabled={loading === 'AddEnergySource'}
+          />
+          <Button onClick={handleAddSource} disabled={loading !== null}>
+            {loading === 'AddEnergySource' ? <Spinner /> : 'Add'}
+          </Button>
+        </InputRow>
+      </div>
+
+      {/* ---------- GENERATE ENERGY ---------- */}
+      <div>
+        <SubTitle>Generate Energy</SubTitle>
+        <InputRow>
+          <Input
+            width="10rem"
+            placeholder="Source"
+            value={genEnergy.source}
+            onChange={e => setGenEnergy(v => ({ ...v, source: e.target.value }))}
+            disabled={loading === 'GenerateEnergy'}
+            list="source-list"
+            autoComplete="off"
+          />
+          <datalist id="source-list">
+            {(grid?.energy_sources || []).map((s, i) => (
+              <option key={i} value={s[0]} />
+            ))}
+          </datalist>
+          <Input
+            width="8rem"
+            placeholder="Energy"
+            type="number"
+            min={0}
+            value={genEnergy.energy}
+            onChange={e => setGenEnergy(v => ({ ...v, energy: e.target.value }))}
+            disabled={loading === 'GenerateEnergy'}
+          />
+          <Button onClick={handleGenerate} disabled={loading !== null}>
+            {loading === 'GenerateEnergy' ? <Spinner /> : 'Generate'}
+          </Button>
+        </InputRow>
+      </div>
+
+      {/* ---------- INITIALIZE GRID ---------- */}
+      <div>
+        <SubTitle>Initialize Grid (Admin only)</SubTitle>
+        {initSources.map((s, idx) => (
+          <InputRow key={idx}>
+            <Input
+              width="10rem"
+              placeholder="Source"
+              value={s.source}
+              onChange={e => {
+                const copy = [...initSources];
+                copy[idx].source = e.target.value;
+                setInitSources(copy);
+              }}
+              disabled={loading === 'Initialize'}
+            />
+            <Input
+              width="8rem"
+              placeholder="Capacity"
+              type="number"
+              min={0}
+              value={s.capacity}
+              onChange={e => {
+                const copy = [...initSources];
+                copy[idx].capacity = e.target.value;
+                setInitSources(copy);
+              }}
+              disabled={loading === 'Initialize'}
+            />
+            <Button
+              style={{ padding: '0.35rem 0.8rem' }}
+              onClick={() =>
+                setInitSources(arr => (arr.length > 1 ? arr.filter((_, i) => i !== idx) : arr))
+              }
+              disabled={loading === 'Initialize'}
+            >
+              🗑
+            </Button>
+            {idx === initSources.length - 1 && (
+              <Button
+                style={{ padding: '0.35rem 0.8rem' }}
+                onClick={() =>
+                  setInitSources(arr => [...arr, { source: '', capacity: '' }])
+                }
+                disabled={loading === 'Initialize'}
+              >
+                +
+              </Button>
+            )}
+          </InputRow>
+        ))}
+
+        <Button
+          style={{ width: '100%', marginTop: '0.75rem' }}
+          onClick={handleInitialize}
+          disabled={loading !== null}
+        >
+          {loading === 'Initialize' ? <Spinner /> : 'Initialize Grid'}
+        </Button>
+      </div>
+    </Container>
+  );
+};

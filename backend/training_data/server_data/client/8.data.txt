@@ -1,0 +1,461 @@
+
+// idl example with Session service
+
+type Config = struct {
+  gas_to_delete_session: u64,
+  minimum_session_duration_ms: u64,
+  ms_per_block: u64,
+};
+
+/// Enum representing the colors of the traffic light.
+type LightColor = enum {
+  Red,
+  Yellow,
+  Green,
+};
+
+type IoTrafficLightState = struct {
+  current_color: LightColor,
+  controller: actor_id,
+  transitions: u64,
+  log: vec struct { u64, LightColor },
+};
+
+type SignatureData = struct {
+  key: actor_id,
+  duration: u64,
+  allowed_actions: vec SessionAction,
+};
+
+/// Enum for signless session actions.
+type SessionAction = enum {
+  ChangeLight,
+  SetController,
+  QueryState,
+};
+
+type SessionData = struct {
+  key: actor_id,
+  expires: u64,
+  allowed_actions: vec SessionAction,
+  expires_at_block: u32,
+};
+
+constructor {
+  New : (config: Config);
+};
+
+service Service {
+  /// Change the light color (cycle: Red -> Green -> Yellow -> Red).
+  ChangeLight : (session_for_account: opt actor_id) -> TrafficLightEvent;
+  /// Change the controller address.
+  SetController : (new_controller: actor_id, session_for_account: opt actor_id) -> TrafficLightEvent;
+  /// Query: get the controller address.
+  query Controller : () -> actor_id;
+  /// Query: get the current light color.
+  query CurrentColor : () -> LightColor;
+  /// Query: get the number of color transitions.
+  query GetTransitions : () -> u64;
+  /// Query: full state.
+  query QueryState : () -> IoTrafficLightState;
+
+  events {
+    LightChanged: struct {
+      color: LightColor,
+      transitions: u64,
+      controller: actor_id,
+    };
+    ControllerChanged: actor_id;
+    Initialized: struct {
+      actor_id,
+      LightColor,
+    };
+  }
+};
+
+service Session {
+  CreateSession : (signature_data: SignatureData, signature: opt vec u8) -> null;
+  DeleteSessionFromAccount : () -> null;
+  DeleteSessionFromProgram : (session_for_account: actor_id) -> null;
+  query SessionForTheAccount : (account: actor_id) -> opt SessionData;
+  query Sessions : () -> vec struct { actor_id, SessionData };
+
+  events {
+    SessionCreated;
+    SessionDeleted;
+  }
+};
+
+
+// client example in ./client.ts with Session service
+
+import { GearApi, decodeAddress } from '@gear-js/api';
+import { TypeRegistry } from '@polkadot/types';
+import { TransactionBuilder, getServiceNamePrefix, getFnNamePrefix, ZERO_ADDRESS } from 'sails-js';
+
+export type ActorId = string;
+
+export interface Config {
+  gas_to_delete_session: number | string | bigint;
+  minimum_session_duration_ms: number | string | bigint;
+  ms_per_block: number | string | bigint;
+}
+
+export type LightColor = 'Red' | 'Yellow' | 'Green';
+
+export interface IoTrafficLightState {
+  current_color: LightColor;
+  controller: ActorId;
+  transitions: number | string | bigint;
+  log: Array<[number | string | bigint, LightColor]>;
+}
+
+export interface SignatureData {
+  key: ActorId;
+  duration: number | string | bigint;
+  allowed_actions: Array<SessionAction>;
+}
+
+export type SessionAction = 'ChangeLight' | 'SetController' | 'QueryState';
+
+export interface SessionData {
+  key: ActorId;
+  expires: number | string | bigint;
+  allowed_actions: Array<SessionAction>;
+  expires_at_block: number;
+}
+
+export type TrafficLightEvent =
+  | { LightChanged: { color: LightColor; transitions: number | string | bigint; controller: ActorId } }
+  | { Initialized: { actor_id: ActorId; LightColor: LightColor } };
+  
+const types = {
+  Config: {
+    gas_to_delete_session: 'u64',
+    minimum_session_duration_ms: 'u64',
+    ms_per_block: 'u64',
+  },
+  LightColor: { _enum: ['Red', 'Yellow', 'Green'] },
+  IoTrafficLightState: {
+    current_color: 'LightColor',
+    controller: '[u8;32]',
+    transitions: 'u64',
+    log: 'Vec<(u64, LightColor)>',
+  },
+  SignatureData: { key: '[u8;32]', duration: 'u64', allowed_actions: 'Vec<SessionAction>' },
+  SessionAction: { _enum: ['ChangeLight', 'SetController', 'QueryState'] },
+  SessionData: {
+    key: '[u8;32]',
+    expires: 'u64',
+    allowed_actions: 'Vec<SessionAction>',
+    expires_at_block: 'u32',
+  },
+  LightChanged: {
+    color: 'LightColor',
+    transitions: 'u64',
+    controller: '[u8;32]',
+  },
+  Initialized: {
+    actor_id: '[u8;32]',
+    LightColor: 'LightColor',
+  },
+  TrafficLightEvent: {
+    _enum: {
+      LightChanged: 'LightChanged',
+      Initialized: 'Initialized',
+    },
+  },
+};
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly service: Service;
+  public readonly session: Session;
+
+  constructor(
+    public api: GearApi,
+    private _programId?: `0x${string}`,
+  ) {
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+
+    this.service = new Service(this);
+    this.session = new Session(this);
+  }
+
+  public get programId(): `0x${string}` {
+    if (!this._programId) throw new Error('Program ID is not set');
+    return this._programId;
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer, config: Config): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      ['New', config],
+      '(String, Config)',
+      'String',
+      code,
+    );
+    this._programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`, config: Config): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      ['New', config],
+      '(String, Config)',
+      'String',
+      codeId,
+    );
+    this._programId = builder.programId;
+    return builder;
+  }
+}
+
+export class Service {
+  constructor(private _program: Program) {}
+
+  public changeLight(session_for_account: ActorId | null): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'ChangeLight', session_for_account],
+      '(String, String, Option<[u8;32]>)',
+      'TrafficLightEvent',
+      this._program.programId,
+    );
+  }
+
+  public setController(new_controller: ActorId, session_for_account: ActorId | null): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'SetController', new_controller, session_for_account],
+      '(String, String, [u8;32], Option<[u8;32]>)',
+      'TrafficLightEvent',
+      this._program.programId,
+    );
+  }
+
+  public async controller(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<ActorId> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'Controller']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, [u8;32])', reply.payload);
+    return result[2].toJSON();
+  }
+
+  public async currentColor(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<LightColor> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'CurrentColor']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, LightColor)', reply.payload);
+    return result[2].toJSON() as LightColor;
+  }
+
+  public async getTransitions(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<number | string | bigint> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'GetTransitions']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, u64)', reply.payload);
+    return result[2].toBigInt();
+  }
+
+  public async queryState(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<IoTrafficLightState> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'QueryState']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, IoTrafficLightState)', reply.payload);
+    return result[2].toJSON() as IoTrafficLightState;
+  }
+
+  public subscribeToLightChangedEvent(
+    callback: (data: { color: LightColor; transitions: number | string | bigint; controller: ActorId }) => void | Promise<void>,
+  ): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) return;
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Service' && getFnNamePrefix(payload) === 'LightChanged') {
+        void Promise.resolve(callback(
+          this._program.registry.createType('(String, String, LightChanged)', message.payload)[2].toJSON() as {
+            color: LightColor;
+            transitions: number | string | bigint;
+            controller: ActorId;
+          }
+        )).catch(console.error);
+      }
+    });
+  }
+
+  public subscribeToControllerChangedEvent(
+    callback: (data: ActorId) => void | Promise<void>,
+  ): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) return;
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Service' && getFnNamePrefix(payload) === 'ControllerChanged') {
+        void Promise.resolve(callback(
+          this._program.registry.createType('(String, String, [u8;32])', message.payload)[2].toJSON() 
+        )).catch(console.error);
+      }
+    });
+  }
+
+  public subscribeToInitializedEvent(
+    callback: (data: { actor_id: ActorId; LightColor: LightColor }) => void | Promise<void>,
+  ): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) return;
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Service' && getFnNamePrefix(payload) === 'Initialized') {
+        void Promise.resolve(callback(
+          this._program.registry.createType('(String, String, Initialized)', message.payload)[2].toJSON() as {
+            actor_id: ActorId;
+            LightColor: LightColor;
+          }
+        )).catch(console.error);
+      }
+    });
+  }
+}
+
+export class Session {
+  constructor(private _program: Program) {}
+
+  public createSession(signature_data: SignatureData, signature: `0x${string}` | null): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Session', 'CreateSession', signature_data, signature],
+      '(String, String, SignatureData, Option<Vec<u8>>)',
+      'Null',
+      this._program.programId,
+    );
+  }
+
+  public deleteSessionFromAccount(): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Session', 'DeleteSessionFromAccount'],
+      '(String, String)',
+      'Null',
+      this._program.programId,
+    );
+  }
+
+  public deleteSessionFromProgram(session_for_account: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Session', 'DeleteSessionFromProgram', session_for_account],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId,
+    );
+  }
+
+  public async sessionForTheAccount(
+    account: ActorId,
+    originAddress?: string,
+    value?: number | string | bigint,
+    atBlock?: `0x${string}`,
+  ): Promise<SessionData | null> {
+    const payload = this._program.registry.createType('(String, String, [u8;32])', ['Session', 'SessionForTheAccount', account]).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, Option<SessionData>)', reply.payload);
+    return result[2].toJSON() as SessionData | null;
+  }
+
+  public async sessions(
+    originAddress?: string,
+    value?: number | string | bigint,
+    atBlock?: `0x${string}`,
+  ): Promise<Array<[ActorId, SessionData]>> {
+    const payload = this._program.registry.createType('(String, String)', ['Session', 'Sessions']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, Vec<([u8;32], SessionData)>)', reply.payload);
+    return result[2].toJSON() as Array<[ActorId, SessionData]>;
+  }
+
+  public subscribeToSessionCreatedEvent(callback: (data: null) => void | Promise<void>): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) return;
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Session' && getFnNamePrefix(payload) === 'SessionCreated') {
+        void Promise.resolve(callback(null)).catch(console.error);
+      }
+    });
+  }
+
+  public subscribeToSessionDeletedEvent(callback: (data: null) => void | Promise<void>): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) return;
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Session' && getFnNamePrefix(payload) === 'SessionDeleted') {
+        void Promise.resolve(callback(null)).catch(console.error);
+      }
+    });
+  }
+}
+

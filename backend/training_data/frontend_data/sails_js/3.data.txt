@@ -1,0 +1,668 @@
+// idl example 
+
+constructor {
+  New : (name: str, symbol: str, decimals: u8);
+};
+
+service Vft {
+  Burn : (from: actor_id, value: u256) -> bool;
+  GrantAdminRole : (to: actor_id) -> null;
+  GrantBurnerRole : (to: actor_id) -> null;
+  GrantMinterRole : (to: actor_id) -> null;
+  Mint : (to: actor_id, value: u256) -> bool;
+  RevokeAdminRole : (from: actor_id) -> null;
+  RevokeBurnerRole : (from: actor_id) -> null;
+  RevokeMinterRole : (from: actor_id) -> null;
+  Approve : (spender: actor_id, value: u256) -> bool;
+  Transfer : (to: actor_id, value: u256) -> bool;
+  TransferFrom : (from: actor_id, to: actor_id, value: u256) -> bool;
+  query Admins : () -> vec actor_id;
+  query Burners : () -> vec actor_id;
+  query Minters : () -> vec actor_id;
+  query Allowance : (owner: actor_id, spender: actor_id) -> u256;
+  query BalanceOf : (account: actor_id) -> u256;
+  query Decimals : () -> u8;
+  query Name : () -> str;
+  query Symbol : () -> str;
+  query TotalSupply : () -> u256;
+
+  events {
+    Minted: struct {
+      to: actor_id,
+      value: u256,
+    };
+    Burned: struct {
+      from: actor_id,
+      value: u256,
+    };
+    Approval: struct {
+      owner: actor_id,
+      spender: actor_id,
+      value: u256,
+    };
+    Transfer: struct {
+      from: actor_id,
+      to: actor_id,
+      value: u256,
+    };
+  }
+};
+
+// client example in ./client.ts
+
+
+import { GearApi, decodeAddress } from '@gear-js/api';
+import { TypeRegistry } from '@polkadot/types';
+import { TransactionBuilder, ActorId, getServiceNamePrefix, getFnNamePrefix, ZERO_ADDRESS } from 'sails-js';
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly vft: Service;
+
+  constructor(public api: GearApi, private _programId?: `0x${string}`) {
+    const types: Record<string, any> = {};
+
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+
+    this.vft = new Service(this);
+  }
+
+  public get programId(): `0x${string}` {
+    if (!this._programId) throw new Error('Program ID is not set');
+    return this._programId;
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer, name: string, symbol: string, decimals: number): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      ['New', name, symbol, decimals],
+      '(String, String, String, u8)',
+      'String',
+      code,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`, name: string, symbol: string, decimals: number) {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      ['New', name, symbol, decimals],
+      '(String, String, String, u8)',
+      'String',
+      codeId,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+}
+
+export class Service {
+  constructor(private _program: Program) {}
+
+  public burn(from: ActorId, value: bigint): TransactionBuilder<boolean> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<boolean>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'Burn', from, value],
+      '(String, String, [u8;32], U256)',
+      'bool',
+      this._program.programId
+    );
+  }
+
+  public grantAdminRole(to: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'GrantAdminRole', to],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId
+    );
+  }
+
+  public grantBurnerRole(to: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'GrantBurnerRole', to],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId
+    );
+  }
+
+  public grantMinterRole(to: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'GrantMinterRole', to],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId
+    );
+  }
+
+  public mint(to: ActorId, value: bigint): TransactionBuilder<boolean> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<boolean>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'Mint', to, value],
+      '(String, String, [u8;32], U256)',
+      'bool',
+      this._program.programId
+    );
+  }
+
+  public revokeAdminRole(from: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'RevokeAdminRole', from],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId
+    );
+  }
+
+  public revokeBurnerRole(from: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'RevokeBurnerRole', from],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId
+    );
+  }
+
+  public revokeMinterRole(from: ActorId): TransactionBuilder<null> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<null>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'RevokeMinterRole', from],
+      '(String, String, [u8;32])',
+      'Null',
+      this._program.programId
+    );
+  }
+
+  public approve(spender: ActorId, value: bigint): TransactionBuilder<boolean> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<boolean>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'Approve', spender, value],
+      '(String, String, [u8;32], U256)',
+      'bool',
+      this._program.programId
+    );
+  }
+
+  public transfer(to: ActorId, value: bigint): TransactionBuilder<boolean> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<boolean>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'Transfer', to, value],
+      '(String, String, [u8;32], U256)',
+      'bool',
+      this._program.programId
+    );
+  }
+
+  public transferFrom(from: ActorId, to: ActorId, value: bigint): TransactionBuilder<boolean> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<boolean>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Vft', 'TransferFrom', from, to, value],
+      '(String, String, [u8;32], [u8;32], U256)',
+      'bool',
+      this._program.programId
+    );
+  }
+
+  public async admins(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<Array<ActorId>> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'Admins']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, Vec<[u8;32]>)', reply.payload);
+    return result[2].toJSON() as unknown as Array<ActorId>;
+  }
+
+  public async burners(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<Array<ActorId>> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'Burners']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, Vec<[u8;32]>)', reply.payload);
+    return result[2].toJSON() as unknown as Array<ActorId>;
+  }
+
+  public async minters(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<Array<ActorId>> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'Minters']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, Vec<[u8;32]>)', reply.payload);
+    return result[2].toJSON() as unknown as Array<ActorId>;
+  }
+
+  public async allowance(owner: ActorId, spender: ActorId, originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<bigint> {
+    const payload = this._program.registry.createType('(String, String, [u8;32], [u8;32])', ['Vft', 'Allowance', owner, spender]).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, U256)', reply.payload);
+    return result[2].toBigInt() as unknown as bigint;
+  }
+
+  public async balanceOf(account: ActorId, originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<bigint> {
+    const payload = this._program.registry.createType('(String, String, [u8;32])', ['Vft', 'BalanceOf', account]).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, U256)', reply.payload);
+    return result[2].toBigInt() as unknown as bigint;
+  }
+
+  public async decimals(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<number> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'Decimals']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, u8)', reply.payload);
+    return result[2].toNumber() as unknown as number;
+  }
+
+  public async name(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<string> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'Name']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, String)', reply.payload);
+    return result[2].toString() as unknown as string;
+  }
+
+  public async symbol(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<string> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'Symbol']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, String)', reply.payload);
+    return result[2].toString() as unknown as string;
+  }
+
+  public async totalSupply(originAddress?: string, value?: bigint, atBlock?: `0x${string}`): Promise<bigint> {
+    const payload = this._program.registry.createType('(String, String)', ['Vft', 'TotalSupply']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || BigInt(0),
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, U256)', reply.payload);
+    return result[2].toBigInt() as unknown as bigint;
+  }
+
+  public subscribeToMintedEvent(callback: (data: { to: ActorId; value: bigint }) => void | Promise<void>): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) {
+        return;
+      }
+
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Vft' && getFnNamePrefix(payload) === 'Minted') {
+        callback(
+          this._program.registry
+            .createType('(String, String, {"to":"[u8;32]","value":"U256"})', message.payload)[2]
+            .toJSON() as unknown as { to: ActorId; value: bigint }
+        );
+      }
+    });
+  }
+
+  public subscribeToBurnedEvent(callback: (data: { from: ActorId; value: bigint }) => void | Promise<void>): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) {
+        return;
+      }
+
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Vft' && getFnNamePrefix(payload) === 'Burned') {
+        callback(
+          this._program.registry
+            .createType('(String, String, {"from":"[u8;32]","value":"U256"})', message.payload)[2]
+            .toJSON() as unknown as { from: ActorId; value: bigint }
+        );
+      }
+    });
+  }
+
+  public subscribeToApprovalEvent(callback: (data: { owner: ActorId; spender: ActorId; value: bigint }) => void | Promise<void>): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) {
+        return;
+      }
+
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Vft' && getFnNamePrefix(payload) === 'Approval') {
+        callback(
+          this._program.registry
+            .createType('(String, String, {"owner":"[u8;32]","spender":"[u8;32]","value":"U256"})', message.payload)[2]
+            .toJSON() as unknown as { owner: ActorId; spender: ActorId; value: bigint }
+        );
+      }
+    });
+  }
+
+  public subscribeToTransferEvent(callback: (data: { from: ActorId; to: ActorId; value: bigint }) => void | Promise<void>): Promise<() => void> {
+    return this._program.api.gearEvents.subscribeToGearEvent('UserMessageSent', ({ data: { message } }) => {
+      if (!message.source.eq(this._program.programId) || !message.destination.eq(ZERO_ADDRESS)) {
+        return;
+      }
+
+      const payload = message.payload.toHex();
+      if (getServiceNamePrefix(payload) === 'Vft' && getFnNamePrefix(payload) === 'Transfer') {
+        callback(
+          this._program.registry
+            .createType('(String, String, {"from":"[u8;32]","to":"[u8;32]","value":"U256"})', message.payload)[2]
+            .toJSON() as unknown as { from: ActorId; to: ActorId; value: bigint }
+        );
+      }
+    });
+  }
+}
+
+
+// React Component example with sails.js
+
+import React, { useState, useCallback, useEffect } from 'react';
+import styled, { keyframes } from 'styled-components';
+import { useAccount, useAlert, useApi } from '@gear-js/react-hooks';
+import { web3Enable, web3FromSource } from '@polkadot/extension-dapp';
+import { TransactionBuilder } from 'sails-js';
+import { Program, Service } from './lib';
+
+
+type Method = 'Mint' | 'Burn' | 'GrantAdminRole' | 'Transfer';
+type BigNumberish = bigint | number | string;
+
+const PROGRAM_ID =
+  '0x.....';
+
+const spin = keyframes`to { transform: rotate(360deg); }`;
+
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 2rem;
+`;
+
+const Row = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+`;
+
+const Input = styled.input`
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #333;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  min-width: 220px;
+`;
+
+const Select = styled.select`
+  ${Input};
+  min-width: 160px;
+`;
+
+const Button = styled.button<{ disabled?: boolean }>`
+  position: relative;
+  padding: 0.7rem 1.4rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: 2px solid #333;
+  border-radius: 0.25rem;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+
+  &:hover { background: ${({ disabled }) => (disabled ? '#fff' : '#f0f0f0')}; }
+  &:active { background: ${({ disabled }) => (disabled ? '#fff' : '#e0e0e0')}; }
+
+  ${({ disabled }) => disabled && 'opacity: 0.6; cursor: not-allowed;'}
+`;
+
+const Spinner = styled.div`
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #333;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ${spin} 0.8s linear infinite;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+`;
+
+/* ------------------------------------------------------------------ */
+/* main component                                                      */
+/* ------------------------------------------------------------------ */
+
+export const VftComponent: React.FC = () => {
+  const { account } = useAccount();
+  const alert = useAlert();
+  const { api, isApiReady } = useApi();
+
+  const [loading, setLoading] = useState<Method | null>(null);
+  const [decimals, setDecimals] = useState<number | null>(null);
+
+  /* form state */
+  const [method, setMethod] = useState<Method>('Mint');
+  const [target, setTarget] = useState<string>('');
+  const [amount, setAmount] = useState<string>(''); // human units
+
+  /* enable extension & fetch decimals */
+  useEffect(() => { void web3Enable('VFT dApp'); }, []);
+
+  useEffect(() => {
+    if (!api || !isApiReady) return;
+    const svc = new Service(new Program(api, PROGRAM_ID));
+
+    let off = false;
+    void svc.decimals().then((d) => !off && setDecimals(d))
+      .catch((e) => console.error('Error fetching decimals:', e));
+    return () => { off = true; };
+  }, [api, isApiReady]);
+
+  /* helpers */
+  const toUnits = (value: BigNumberish): bigint => {
+    const base = typeof value === 'bigint' ? value : BigInt(value);
+    return decimals === null ? base : base * (BigInt(10) ** BigInt(decimals));
+  };
+
+  const sendTransaction = useCallback(
+    async (tx: TransactionBuilder<unknown>, m: Method) => {
+      try {
+        const { signer } = await web3FromSource(account!.meta.source);
+        tx.withAccount(account!.decodedAddress, { signer });
+
+        await tx.calculateGas();
+        const { blockHash, response } = await tx.signAndSend();
+
+        alert.info(`Included in block ${blockHash}`);
+        await response();
+        alert.success(`${m} succeeded`);
+      } catch (err) {
+        console.error(err);
+        alert.error(`${m} failed`);
+      } finally {
+        setLoading(null);
+      }
+    },
+    [account, alert]
+  );
+
+  /* main dispatcher */
+  const handleSubmit = async () => {
+    if (!account) { alert.error('Connect your wallet first'); return; }
+    if (!isApiReady) { alert.error('Node API not ready'); return; }
+
+    const svc = new Service(new Program(api, PROGRAM_ID));
+    let tx: TransactionBuilder<unknown>;
+
+    try {
+      switch (method) {
+        case 'Mint':
+          if (!target || !amount) throw new Error('Address and amount required');
+          tx = svc.mint(target, toUnits(amount));
+          break;
+        case 'Burn':
+          if (!amount) throw new Error('Amount required');
+          tx = svc.burn(account.decodedAddress, toUnits(amount));
+          break;
+        case 'GrantAdminRole':
+          if (!target) throw new Error('Address required');
+          tx = svc.grantAdminRole(target);
+          break;
+        case 'Transfer':
+          if (!target || !amount) throw new Error('Address and amount required');
+          tx = svc.transfer(target, toUnits(amount));
+          break;
+      }
+
+      setLoading(method);
+      await sendTransaction(tx!, method);
+    } catch (e) {
+      alert.error((e as Error).message);
+    }
+  };
+
+  const needsAddress = method === 'Mint' || method === 'Transfer' || method === 'GrantAdminRole';
+  const needsAmount = method === 'Mint' || method === 'Transfer' || method === 'Burn';
+
+  return (
+    <Container>
+      <Row>
+        <Select value={method} onChange={(e) => setMethod(e.target.value as Method)}>
+          <option value="Mint">Mint</option>
+          <option value="Burn">Burn</option>
+          <option value="GrantAdminRole">Grant Admin Role</option>
+          <option value="Transfer">Transfer</option>
+        </Select>
+
+        {needsAddress && (
+          <Input
+            placeholder="Target address"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+          />
+        )}
+
+        {needsAmount && (
+          <Input
+            placeholder="Amount (human units)"
+            type="number"
+            min="0"
+            step="any"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        )}
+
+        <Button disabled={loading !== null} onClick={handleSubmit}>
+          {loading ? <Spinner /> : method}
+        </Button>
+      </Row>
+    </Container>
+  );
+};
+
+

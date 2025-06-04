@@ -1,0 +1,68 @@
+
+// React component for signless with ez transactions
+
+// SignlessButton.tsx
+import { useAccount } from '@gear-js/react-hooks';
+import { useSignlessTransactions, EzSignlessTransactions } from 'gear-ez-transactions';
+import { ALLOWED_SIGNLESS_ACTIONS } from '@/consts';
+import { decodeAddress } from '@gear-js/api';
+import { u8aToHex } from '@polkadot/util';
+import { useEffect } from 'react';
+import { CSSProperties } from 'react';
+
+export function SignlessButton() {
+  const { account } = useAccount();
+  const signless = useSignlessTransactions();
+
+  useEffect(() => {
+    if (!account || signless.isActive) return;
+
+    const duration = 3600;
+    const session = {
+      key: u8aToHex(decodeAddress(account.address)),
+      expires: (Date.now() + duration * 1000).toString(),
+      duration,
+      allowedActions: ALLOWED_SIGNLESS_ACTIONS,
+    };
+
+    const voucherValue = 10n * 10n ** 12n;
+
+    signless.createSession(session, Number(voucherValue), {
+      type: 'signless',
+      allowedActions: ALLOWED_SIGNLESS_ACTIONS,
+      programId: import.meta.env.VITE_PROGRAMID,
+      shouldIssueVoucher: false,
+      onSuccess: () => console.log('✅ Signless session created'),
+    });
+  }, [account, signless.isActive]);
+
+  return (
+    <div style={styles.container}>
+      <EzSignlessTransactions allowedActions={ALLOWED_SIGNLESS_ACTIONS} />
+    </div>
+  );
+}
+
+const styles: Record<string, CSSProperties> = {
+  container: {
+    padding: '1.5rem',
+    background: '#f9fafb',
+    borderRadius: '1rem',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+    textAlign: 'center',
+    maxWidth: '420px',
+    margin: '2rem auto',
+  },
+  button: {
+    background: '#6366f1',
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: '1rem',
+    padding: '0.75rem 1.25rem',
+    borderRadius: '0.75rem',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'background 0.3s',
+  },
+};
+

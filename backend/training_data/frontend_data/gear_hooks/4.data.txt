@@ -1,0 +1,29 @@
+
+
+// example: The useProgramEvent hook initializes a subscription to a specified program event.
+
+import { useProgram, useProgramEvent } from '@gear-js/react-hooks';
+import { Routing } from './pages';
+import { Program } from './lib';
+
+function App() {
+  const { data: program } = useProgram({
+    library: Program,
+    id: '0x...',
+  });
+
+  useProgramEvent({
+    program,
+    serviceName: 'service',
+    functionName: 'event',
+    onData: (data) => console.log(data),
+  });
+
+  return (
+    <main>
+      <Routing />
+    </main>
+  );
+}
+
+export { App };

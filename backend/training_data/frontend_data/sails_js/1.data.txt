@@ -1,0 +1,408 @@
+
+// idl example 
+
+type TrafficLightEvent = enum {
+      Green,
+      Yellow,
+      Red,
+    };
+
+    type IoTrafficLightState = struct {
+      current_light: str,
+      all_users: vec struct { actor_id, str },
+    };
+
+    constructor {
+      New : ();
+    };
+
+    service TrafficLight {
+      Green : () -> TrafficLightEvent;
+      Red : () -> TrafficLightEvent;
+      Yellow : () -> TrafficLightEvent;
+      query TrafficLight : () -> IoTrafficLightState;
+    };
+
+
+// client example in ./client.ts
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly trafficLight: Service;
+
+  constructor(public api: GearApi, private _programId?: `0x${string}`) {
+    const types: Record<string, any> = {
+      TrafficLightEvent: {"_enum":{"Green":"Null","Yellow":"Null","Red":"Null","Nothing":"Null","KeyringError":"KeyringError","SessionCreated":"Null"}},
+      IoTrafficLightState: {"current_light":"String","all_users":"Vec<([u8;32], String)>"},
+    }
+
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+
+    this.trafficLight = new Service(this);
+  }
+
+  public get programId(): `0x${string}` {
+    if (!this._programId) throw new Error(`Program ID is not set`);
+    return this._programId;
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      'New',
+      'String',
+      'String',
+      code,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`) {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      'New',
+      'String',
+      'String',
+      codeId,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+}
+
+export class Service {
+  constructor(private _program: Program) {}
+
+  public green(): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['TrafficLight', 'Green'],
+      '(String, String)',
+      'TrafficLightEvent',
+      this._program.programId
+    );
+  }
+
+  public red(): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['TrafficLight', 'Red'],
+      '(String, String)',
+      'TrafficLightEvent',
+      this._program.programId
+    );
+  }
+
+  public yellow(): TransactionBuilder<TrafficLightEvent> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<TrafficLightEvent>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['TrafficLight', 'Yellow'],
+      '(String, String)',
+      'TrafficLightEvent',
+      this._program.programId
+    );
+  }
+
+
+  public async trafficLight(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<IoTrafficLightState> {
+    const payload = this._program.registry.createType('(String, String)', ['TrafficLight', 'TrafficLight']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, IoTrafficLightState)', reply.payload);
+    return result[2].toJSON() as unknown as IoTrafficLightState;
+  }
+}
+
+// React component  example with sails.js
+
+import React, { useState, useCallback, useEffect } from 'react';
+import styled, { keyframes } from 'styled-components';
+import { useAccount, useAlert, useApi } from '@gear-js/react-hooks';
+import { web3Enable, web3FromSource } from '@polkadot/extension-dapp';
+import { TransactionBuilder } from 'sails-js';
+import { Program, Service } from './lib';
+
+/* ------------------------------------------------------------------ */
+/* types & constants                                                   */
+/* ------------------------------------------------------------------ */
+
+type Method = 'Red' | 'Yellow' | 'Green';
+
+interface IoTrafficLightState {
+  current_light: string;
+  all_users: [string, string][];
+}
+
+const PROGRAM_ID =
+  '0x18e5b018bc45d9c91eb6f31d27de03562a98f5ffd56b6c6eb2adc3881ba86d9f';
+
+/* ------------------------------------------------------------------ */
+/* styled components                                                   */
+/* ------------------------------------------------------------------ */
+
+const spin = keyframes`to { transform: rotate(360deg); }`;
+
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+  padding: 2rem;
+`;
+
+const ButtonRow = styled.div`
+  display: flex;
+  gap: 1rem;
+`;
+
+const Button = styled.button<{ disabled?: boolean }>`
+  position: relative;
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: 2px solid #333;
+  border-radius: 0.25rem;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+
+  &:hover  { background: ${({ disabled }) => (disabled ? '#fff' : '#f0f0f0')}; }
+  &:active { background: ${({ disabled }) => (disabled ? '#fff' : '#e0e0e0')}; }
+
+  ${({ disabled }) => disabled && 'opacity: 0.6; cursor: not-allowed;'}
+`;
+
+const Spinner = styled.div`
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #333;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ${spin} 0.8s linear infinite;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+`;
+
+const VaraTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.15rem;
+  margin-bottom: 0.6rem;
+`;
+
+const Icon = styled.img`
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+`;
+
+const TokenIcon = styled.img`
+  width: 32px;
+  height: 32px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+`;
+
+const StateBox = styled.div`
+  background: #f7f7fa;
+  border-radius: 0.5rem;
+  border: 1px solid #eee;
+  padding: 1.1rem 1.6rem;
+  min-width: 300px;
+  text-align: left;
+  margin-bottom: 1rem;
+`;
+
+const Tag = styled.span<{ color: string }>`
+  display: inline-block;
+  background: ${({ color }) => color};
+  color: #fff;
+  border-radius: 0.25rem;
+  font-weight: 500;
+  font-size: 0.95em;
+  margin-left: 0.5rem;
+  padding: 0.18em 0.75em 0.18em 0.45em;
+`;
+
+const UserList = styled.ul`
+  list-style: disc inside;
+  padding-left: 0.5rem;
+  margin: 0.35rem 0 0 0;
+  font-size: 0.95em;
+`;
+
+/* ------------------------------------------------------------------ */
+/* helpers                                                             */
+/* ------------------------------------------------------------------ */
+
+function getLightColor(light: string): string {
+  switch (light.toLowerCase()) {
+    case 'green':  return '#24c969';
+    case 'yellow': return '#ffba00';
+    case 'red':    return '#ff5757';
+    default:       return '#888';
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* main component                                                      */
+/* ------------------------------------------------------------------ */
+
+export const TrafficLightComponent: React.FC = () => {
+  const { account } = useAccount();
+  const alert  = useAlert();
+  const { api, isApiReady } = useApi();
+
+  const [loading, setLoading] = useState<Method | null>(null);
+  const [state,   setState]  = useState<IoTrafficLightState | null>(null);
+
+  /* Enable extension once */
+  useEffect(() => { void web3Enable('Traffic Light dApp'); }, []);
+
+  /* Fetch on‑chain state */
+  const fetchState = useCallback(async () => {
+    if (!isApiReady) return;
+    try {
+      const service = new Service(new Program(api, PROGRAM_ID));
+      const st = await service.trafficLight();
+      setState(st);
+    } catch {
+      setState(null);
+    }
+  }, [api, isApiReady]);
+
+  useEffect(() => { void fetchState(); }, [fetchState, loading]);
+
+  /* Transaction wrapper */
+  const sendTransaction = useCallback(
+    async (tx: TransactionBuilder<unknown>, m: Method) => {
+      try {
+        const { signer } = await web3FromSource(account!.meta.source);
+        tx.withAccount(account!.decodedAddress, { signer });
+
+        await tx.calculateGas();
+        const { blockHash, response } = await tx.signAndSend();
+
+        alert.info(`Included in block ${blockHash}`);
+        await response();
+        alert.success(`${m} succeeded`);
+      } catch (err) {
+        console.error(err);
+        alert.error(`${m} failed`);
+      } finally {
+        setLoading(null);
+        void fetchState();
+      }
+    },
+    [account, alert, fetchState]
+  );
+
+  /* Dispatch per method */
+  const send = useCallback(
+    async (m: Method) => {
+      if (!account)    { alert.error('Connect your wallet first'); return; }
+      if (!isApiReady) { alert.error('Node API not ready'); return; }
+
+      const svc = new Service(new Program(api, PROGRAM_ID));
+      let tx: TransactionBuilder<unknown>;
+
+      switch (m) {
+        case 'Red':    tx = svc.red();    break;
+        case 'Yellow': tx = svc.yellow(); break;
+        case 'Green':  tx = svc.green();  break;
+      }
+
+      setLoading(m);
+      await sendTransaction(tx!, m);
+    },
+    [account, api, alert, isApiReady, sendTransaction]
+  );
+
+  /* UI actions */
+  const actions: { method: Method; label: string }[] = [
+    { method: 'Red',    label: 'Set Red' },
+    { method: 'Yellow', label: 'Set Yellow' },
+    { method: 'Green',  label: 'Set Green' },
+  ];
+
+  return (
+    <Container>
+      <VaraTitleRow>
+        <Icon src="https://img.cryptorank.io/coins/vara_network1695313579900.png" alt="Vara" />
+        Vara Network Traffic Light
+        <TokenIcon src="https://s2.coinmarketcap.com/static/img/coins/200x200/28067.png" alt="VFT" />
+      </VaraTitleRow>
+
+      <StateBox>
+        <div>
+          <strong>Current light:</strong>
+          {state ? (
+            <Tag color={getLightColor(state.current_light)}>
+              {state.current_light.toUpperCase()}
+            </Tag>
+          ) : (
+            <span style={{ color: '#aaa', marginLeft: 7 }}>---</span>
+          )}
+        </div>
+
+        <div style={{ margin: '0.8rem 0 0.2rem' }}>
+          <strong>All users:</strong>
+        </div>
+        {state && state.all_users.length ? (
+          <UserList>
+            {state.all_users.map(([actorId, label]) => (
+              <li key={actorId}>
+                <span style={{ fontFamily: 'monospace', color: '#888' }}>
+                  {actorId.slice(0, 10)}...{actorId.slice(-4)}
+                </span>
+                {label && <span style={{ marginLeft: 6, color: '#333' }}>{label}</span>}
+              </li>
+            ))}
+          </UserList>
+        ) : (
+          <span style={{ color: '#aaa', marginLeft: 3 }}>No users seen</span>
+        )}
+      </StateBox>
+
+      <ButtonRow>
+        {actions.map(({ method, label }) => (
+          <Button
+            key={method}
+            disabled={loading !== null}
+            onClick={() => send(method)}
+          >
+            {loading === method ? <Spinner /> : label}
+          </Button>
+        ))}
+      </ButtonRow>
+    </Container>
+  );
+};

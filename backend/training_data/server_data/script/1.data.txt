@@ -1,0 +1,167 @@
+
+// IDL example
+constructor {
+  New : (name: str, symbol: str, decimals: u8);
+};
+
+service Vft {
+  Burn : (from: actor_id, value: u256) -> bool;
+  GrantAdminRole : (to: actor_id) -> null;
+  GrantBurnerRole : (to: actor_id) -> null;
+  GrantMinterRole : (to: actor_id) -> null;
+  Mint : (to: actor_id, value: u256) -> bool;
+  RevokeAdminRole : (from: actor_id) -> null;
+  RevokeBurnerRole : (from: actor_id) -> null;
+  RevokeMinterRole : (from: actor_id) -> null;
+  Approve : (spender: actor_id, value: u256) -> bool;
+  Transfer : (to: actor_id, value: u256) -> bool;
+  TransferFrom : (from: actor_id, to: actor_id, value: u256) -> bool;
+  query Admins : () -> vec actor_id;
+  query Balances : () -> vec struct { actor_id, nat256 };
+  query Burners : () -> vec actor_id;
+  query Minters : () -> vec actor_id;
+  query Allowance : (owner: actor_id, spender: actor_id) -> u256;
+  query BalanceOf : (account: actor_id) -> u256;
+  query Decimals : () -> u8;
+  query Name : () -> str;
+  query Symbol : () -> str;
+  query TotalSupply : () -> u256;
+
+  events {
+    Minted: struct { to: actor_id, value: u256 };
+    Burned: struct { from: actor_id, value: u256 };
+    Approval: struct { owner: actor_id, spender: actor_id, value: u256 };
+    Transfer: struct { from: actor_id, to: actor_id, value: u256 };
+  }
+};
+
+// script.ts example
+import express from 'express';
+import { GearApi, decodeAddress } from '@gear-js/api';
+import { Keyring } from '@polkadot/api';
+import { Service, Program } from './client.js';
+
+const app = express();
+const PORT = 3001;
+
+const keyring = new Keyring({ type: 'sr25519', ss58Format: 42 });
+const alice = keyring.addFromUri('//Alice');
+const bob = keyring.addFromUri('//Bob');
+
+let program: Program;
+let api: GearApi;
+
+(async () => {
+  api = await GearApi.create();
+  const programId = '0x......'; // Reemplaza con el ID del contrato
+  program = new Program(api, programId);
+
+  app.use(express.json());
+
+  // --- Transacciones ---
+  app.post('/transfer', async (req, res) => {
+    try {
+      const { to, value } = req.body;
+      const tx = await program.service
+        .transfer(decodeAddress(to), BigInt(value))
+        .withAccount(alice)
+        .calculateGas();
+      res.json({ gas: tx.extrinsic['method']['args'][2].toString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/approve', async (req, res) => {
+    try {
+      const { spender, value } = req.body;
+      const tx = await program.service
+        .approve(decodeAddress(spender), BigInt(value))
+        .withAccount(alice)
+        .calculateGas();
+      res.json({ gas: tx.extrinsic['method']['args'][2].toString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/mint', async (req, res) => {
+    try {
+      const { to, value } = req.body;
+      const tx = await program.service
+        .mint(decodeAddress(to), BigInt(value))
+        .withAccount(alice)
+        .calculateGas();
+      res.json({ gas: tx.extrinsic['method']['args'][2].toString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/burn', async (req, res) => {
+    try {
+      const { from, value } = req.body;
+      const tx = await program.service
+        .burn(decodeAddress(from), BigInt(value))
+        .withAccount(alice)
+        .calculateGas();
+      res.json({ gas: tx.extrinsic['method']['args'][2].toString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- Consultas ---
+  app.get('/balances', async (_req, res) => {
+    try {
+      const balances = await program.service.balances();
+      res.json(balances.map(({ actor_id, nat256 }) => ({
+        actor_id,
+        balance: nat256.toString(),
+      })));
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/total-supply', async (_req, res) => {
+    try {
+      const total = await program.service.totalSupply();
+      res.json({ total: total.toString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/symbol', async (_req, res) => {
+    try {
+      const symbol = await program.service.symbol();
+      res.json({ symbol });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/name', async (_req, res) => {
+    try {
+      const name = await program.service.name();
+      res.json({ name });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/balance-of/:account', async (req, res) => {
+    try {
+      const address = decodeAddress(req.params.account);
+      const balance = await program.service.balanceOf(address);
+      res.json({ balance: balance.toString() });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.listen(PORT, () => {
+    console.log(`VFT server is running at http://localhost:${PORT}`);
+  });
+})();

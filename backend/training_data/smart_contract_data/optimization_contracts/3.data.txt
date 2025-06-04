@@ -1,0 +1,11 @@
+
+// Delayed Messages for Program Automation
+
+// The gstd::msg::send_delayed function allows sending a message after a specified delay. The function takes the following parameters:
+
+// program - the program (or user) to which the message will be sent
+// payload - the payload of the message
+// value - the amount of tokens to be sent with the message
+// delay - the delay in blocks after which the message will be sent
+
+// Gear Protocol enables the message processing to be paid with reserved gas by using the gstd::msg::send_delayed_from_reservation function, which takes a reservation ID as the first parameter.

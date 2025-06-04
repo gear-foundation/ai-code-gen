@@ -1,0 +1,85 @@
+
+// React component to Send gasless transaction
+
+import { useState } from 'react';
+import { useAlert } from '@gear-js/react-hooks';
+import { usePrepareEzTransactionParams } from 'gear-ez-transactions';
+import { usePrepareProgramTransaction, useProgram } from '@gear-js/react-hooks';
+import { useCheckBalance } from '@/hooks/use-check-balance';
+import { Program } from '@/hocs/lib';
+
+export function GaslessButton() {
+  const alert = useAlert();
+  const [loading, setLoading] = useState(false);
+
+  const programID = '0x....';
+  const { data: program } = useProgram({ library: Program, id: programID });
+
+  const { prepareEzTransactionParams } = usePrepareEzTransactionParams();
+  const { prepareTransactionAsync } = usePrepareProgramTransaction({
+    program,
+    serviceName: 'service',
+    functionName: 'method',
+  });
+
+
+  const [voucherId, setVoucherId] = useState<`0x${string}` | undefined>(undefined);
+
+
+  const { checkBalance } = useCheckBalance({ gaslessVoucherId: voucherId });
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const { sessionForAccount, voucherId: dynamicVoucherId, ...params } = await prepareEzTransactionParams();
+      setVoucherId(dynamicVoucherId); 
+
+      const { transaction } = await prepareTransactionAsync({
+        args: [sessionForAccount],
+        ...params,
+      });
+
+      const calculatedGas = Number(transaction.extrinsic.args[2].toString());
+
+
+      checkBalance(
+        calculatedGas,
+        () => {
+          void (async () => {
+            const { response } = await transaction.signAndSend();
+            await response();
+            alert.success('✅ Gasless transaction sent!');
+            setLoading(false);
+          })();
+        },
+        () => {
+          alert.error('❌ Not enough gasless balance');
+          setLoading(false);
+        }
+      );
+    } catch {
+      alert.error('Error');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      style={{
+        backgroundColor: '#10b981',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '0.75rem',
+        padding: '0.75rem 1.5rem',
+        fontSize: '1rem',
+        fontWeight: 600,
+        cursor: 'pointer',
+        transition: 'background 0.3s ease',
+      }}
+    >
+      {loading ? 'Sending...' : 'Gasless Buttton'}
+    </button>
+  );
+}

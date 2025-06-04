@@ -1,0 +1,14 @@
+$paddingTB: 6px;
+
+.button {
+    color: white !important;
+    box-shadow: inset 0px 0px 0px 2px #FFF !important;
+    padding-top: $paddingTB !important;
+    padding-bottom: $paddingTB !important;
+}
+
+.button:hover {
+    color: black !important;
+    background-color: rgb(197, 197, 197);
+    box-shadow: inset 0px 0px 0px 2px #000 !important;
+}

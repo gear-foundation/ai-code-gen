@@ -1,0 +1,16 @@
+.text {
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    font-weight: 600;
+    transition: all ease-in-out 0.2s;
+}
+
+.textUnSelected {
+    color: rgb(88, 105, 110);
+    cursor: pointer;
+}
+
+.cursorNotAllowed {
+    cursor: not-allowed;
+}

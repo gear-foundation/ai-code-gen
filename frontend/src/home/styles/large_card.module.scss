@@ -1,0 +1,26 @@
+.largeInfoCard {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-left: 30px;
+    grid-column: span 2 / span 2;
+    background-image: url('./../assets/backgrounds/medium-card-background-second.svg');
+    background-repeat: no-repeat;
+    background-position: right;
+
+
+    .largeInfoCardTitleContainer {
+        display: flex;
+        gap: 13px;
+    }
+
+    .largeInfoCardTitle {
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .largeInfoData {
+        width: 40rem;
+        margin-top: 5px;
+    }
+}

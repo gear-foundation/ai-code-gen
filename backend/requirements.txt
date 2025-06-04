@@ -1,0 +1,7 @@
+Flask>=2.2
+flask_cors
+requests
+pandas
+openai
+python-dotenv
+Flask-Limiter

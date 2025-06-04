@@ -1,0 +1,111 @@
+// React component to Send gasless transaction
+
+import { useAccount } from '@gear-js/react-hooks';
+import {
+  useGaslessTransactions,
+  EzGaslessTransactions,
+  EnableGaslessSession,
+} from 'gear-ez-transactions';
+import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+
+export default function GaslessButton() {
+  const { account } = useAccount();
+  const gasless = useGaslessTransactions();
+  const navigate = useNavigate();
+
+  const [hasRequested, setHasRequested] = useState(false);
+
+  const handleStart = () => {
+    navigate('/game');
+  };
+
+  useEffect(() => {
+    if (!account || !gasless.isEnabled || hasRequested || gasless.voucherId) return;
+
+    gasless
+      .requestVoucher(account.address)
+      .then(() => {
+        console.log('✅ Voucher requested on switch activation');
+        setHasRequested(true);
+      })
+      .catch((err) => {
+        console.warn('❌ Failed to request voucher:', err);
+      });
+  }, [gasless.isEnabled, gasless.voucherId, account, hasRequested]);
+
+  const isSessionEnabled = gasless.voucherStatus?.enabled;
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.card}>
+        <h2 style={styles.heading}>Gasless Entry</h2>
+        <p style={styles.description}>
+          {isSessionEnabled
+            ? '✅ Gasless session active. You may start!'
+            : gasless.isEnabled
+            ? '🛠️ Gasless mode is on. Requesting voucher...'
+            : '⚠️ Gasless service is currently unavailable.'}
+        </p>
+
+        <div style={styles.buttonGroup}>
+          <button style={styles.primaryButton} onClick={handleStart}>
+            Start Game
+          </button>
+
+          <div style={{ marginTop: '1rem' }}>       
+             <EnableGaslessSession type="button" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  container: {
+    minHeight: '100vh',
+    background: '#fff',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: '2rem',
+  },
+  card: {
+    background: '#ffffff',
+    borderRadius: '1.25rem',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.08)',
+    maxWidth: '480px',
+    width: '100%',
+    padding: '2.5rem',
+    textAlign: 'center' as const,
+    fontFamily: 'Inter, sans-serif',
+  },
+  heading: {
+    fontSize: '1.75rem',
+    fontWeight: 700,
+    marginBottom: '0.75rem',
+    color: '#111827',
+  },
+  description: {
+    fontSize: '1rem',
+    color: '#4B5563',
+    marginBottom: '1.5rem',
+  },
+  buttonGroup: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '1rem',
+  },
+  primaryButton: {
+    backgroundColor: '#10b981',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '0.75rem',
+    padding: '0.75rem 1.5rem',
+    fontSize: '1rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'background 0.3s ease',
+  },
+};

@@ -1,0 +1,85 @@
+
+// gear-js example
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { GearApi } from '@gear-js/api';
+
+export const GearConnection: React.FC = () => {
+  const [info, setInfo] = useState({ chain: '', nodeName: '', nodeVersion: '' });
+  const [latestBlock, setLatestBlock] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const providerUrl = useMemo(() => 'wss://testnet.vara.network', []);
+
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    const connect = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const gearApi = await GearApi.create({ providerAddress: providerUrl });
+        const [chain, nodeName, nodeVersion] = await Promise.all([
+          gearApi.chain(),
+          gearApi.nodeName(),
+          gearApi.nodeVersion(),
+        ]);
+        setInfo({ chain, nodeName, nodeVersion });
+        unsub = await gearApi.gearEvents.subscribeToNewBlocks(header => {
+          setLatestBlock(`Block #${header.number.toNumber()} - Hash: ${header.hash.toHex()}`);
+        });
+      } catch (err) {
+        console.error('Connection error:', err);
+        setError('Failed to connect to Vara testnet');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    connect();
+    return () => { if (unsub) unsub(); };
+  }, [providerUrl]);
+
+  return (
+    <>
+      <style>{`
+        .gear-container {
+          padding: 1rem;
+          background: #1a202c;
+          color: #fff;
+          border-radius: 8px;
+          font-family: sans-serif;
+          max-width: 600px;
+          margin: 0 auto;
+        }
+        .gear-title {
+          font-size: 1.5rem;
+          margin-bottom: 0.5rem;
+        }
+        .gear-status {
+          margin: 0.25rem 0;
+        }
+        .gear-loading {
+          color: #63b3ed;
+        }
+        .gear-error {
+          color: #f56565;
+        }
+      `}</style>
+
+      <div className="gear-container">
+        <h2 className="gear-title">Vara Network Connection</h2>
+        {loading && <p className="gear-loading">Connecting...</p>}
+        {error && <p className="gear-error">{error}</p>}
+        {!loading && !error && (
+          <>
+            <p className="gear-status"><strong>Chain:</strong> {info.chain}</p>
+            <p className="gear-status"><strong>Node:</strong> {info.nodeName}</p>
+            <p className="gear-status"><strong>Version:</strong> {info.nodeVersion}</p>
+            <p className="gear-status"><strong>Latest Block:</strong> {latestBlock || 'Waiting for blocks...'}</p>
+          </>
+        )}
+      </div>
+    </>
+  );
+};

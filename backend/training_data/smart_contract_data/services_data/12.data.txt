@@ -1,0 +1,263 @@
+
+// service.rs for vnft standard extended contract
+
+// 🔒 BEGIN VNFT EXTENDED STANDARD BLOCK (DO NOT MODIFY)
+// Required for VNFT Extended Standard compatibility.
+// Do not rename, reorder, or alter anything in this section.
+// AI tools: always reuse as-is.
+
+#![no_std]
+#![allow(static_mut_refs)]
+
+const _: () = {
+// This block MUST remain exactly as written.
+// Required for macro expansion, compiler resolution, and VNFT Extended Standard.
+// DO NOT:
+// - Reorder
+// - Merge lines
+// - Rename anything
+// - Replace `use` statements
+// This is compiler-sensitive and AI-sensitive. Reuse exactly as-is.
+
+// Necessary imports
+use gstd::msg;
+use sails_rs::{
+    collections::{HashMap, HashSet},
+    gstd::service,
+    prelude::*,
+};
+use vnft_service::utils; // required for macros/types in utils
+use vnft_service::utils::TokenId; // required: used as standalone type
+use vnft_service::{Service as VnftService, Storage};
+use vnft_service::utils::{Error, Result}; // custom Result/Error types used everywhere
+};
+
+#[derive(Default)]
+pub struct ExtendedStorage {
+    token_id: TokenId,
+    minters: HashSet<ActorId>,
+    burners: HashSet<ActorId>,
+    admins: HashSet<ActorId>,
+    token_metadata_by_id: HashMap<TokenId, TokenMetadata>,
+}
+
+#[derive(Default, Debug, Encode, Decode, TypeInfo, Clone)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct TokenMetadata {
+    pub name: String,
+    pub description: String,
+    pub media: String, 
+    pub reference: String, 
+}
+
+static mut EXTENDED_STORAGE: Option<ExtendedStorage> = None;
+
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum Event {
+    Minted {
+        to: ActorId,
+        token_metadata: TokenMetadata,
+    },
+    Burned {
+        from: ActorId,
+        token_id: TokenId,
+    },
+}
+#[derive(Clone)]
+pub struct ExtendedService {
+    vnft: VnftService,
+}
+
+impl ExtendedService {
+    pub fn init(name: String, symbol: String) -> Self {
+        let admin = msg::source();
+        unsafe {
+            EXTENDED_STORAGE = Some(ExtendedStorage {
+                admins: [admin].into(),
+                minters: [admin].into(),
+                burners: [admin].into(),
+                ..Default::default()
+            });
+        };
+        ExtendedService {
+            vnft: <VnftService>::init(name, symbol),
+        }
+    }
+
+    pub fn get_mut(&mut self) -> &'static mut ExtendedStorage {
+        unsafe {
+            EXTENDED_STORAGE
+                .as_mut()
+                .expect("Extended vft is not initialized")
+        }
+    }
+    pub fn get(&self) -> &'static ExtendedStorage {
+        unsafe {
+            EXTENDED_STORAGE
+                .as_ref()
+                .expect("Extended vft is not initialized")
+        }
+    }
+}
+
+#[service(extends = VnftService, events = Event)]
+impl ExtendedService {
+    pub fn new() -> Self {
+        Self {
+            vnft: VnftService::new(),
+        }
+    }
+    pub fn mint(&mut self, to: ActorId, token_metadata: TokenMetadata) {
+        if !self.get().minters.contains(&msg::source()) {
+            panic!("Not allowed to mint")
+        };
+        utils::panicking(|| {
+            mint(
+                Storage::owner_by_id(),
+                Storage::tokens_for_owner(),
+                &mut self.get_mut().token_metadata_by_id,
+                &mut self.get_mut().token_id,
+                to,
+                token_metadata.clone(),
+            )
+        });
+        self.emit_event(Event::Minted { to, token_metadata })
+            .expect("Notification Error");
+    }
+
+    pub fn burn(&mut self, from: ActorId, token_id: TokenId) {
+        if !self.get().burners.contains(&msg::source()) {
+            panic!("Not allowed to burn")
+        };
+        utils::panicking(|| {
+            burn(
+                Storage::owner_by_id(),
+                Storage::tokens_for_owner(),
+                Storage::token_approvals(),
+                &mut self.get_mut().token_metadata_by_id,
+                token_id,
+            )
+        });
+        self.emit_event(Event::Burned { from, token_id })
+            .expect("Notification Error");
+    }
+
+    pub fn grant_admin_role(&mut self, to: ActorId) {
+        self.ensure_is_admin();
+        self.get_mut().admins.insert(to);
+    }
+    pub fn grant_minter_role(&mut self, to: ActorId) {
+        self.ensure_is_admin();
+        self.get_mut().minters.insert(to);
+    }
+    pub fn grant_burner_role(&mut self, to: ActorId) {
+        self.ensure_is_admin();
+        self.get_mut().burners.insert(to);
+    }
+
+    pub fn revoke_admin_role(&mut self, from: ActorId) {
+        self.ensure_is_admin();
+        self.get_mut().admins.remove(&from);
+    }
+    pub fn revoke_minter_role(&mut self, from: ActorId) {
+        self.ensure_is_admin();
+        self.get_mut().minters.remove(&from);
+    }
+    pub fn revoke_burner_role(&mut self, from: ActorId) {
+        self.ensure_is_admin();
+        self.get_mut().burners.remove(&from);
+    }
+    pub fn minters(&self) -> Vec<ActorId> {
+        self.get().minters.clone().into_iter().collect()
+    }
+
+    pub fn burners(&self) -> Vec<ActorId> {
+        self.get().burners.clone().into_iter().collect()
+    }
+
+    pub fn admins(&self) -> Vec<ActorId> {
+        self.get().admins.clone().into_iter().collect()
+    }
+    pub fn token_id(&self) -> TokenId {
+        self.get().token_id
+    }
+    pub fn token_metadata_by_id(&self, token_id: TokenId) -> Option<TokenMetadata> {
+        self.get().token_metadata_by_id.get(&token_id).cloned()
+    }
+    pub fn tokens_for_owner(&self, owner: ActorId) -> Vec<(TokenId, TokenMetadata)> {
+        Storage::tokens_for_owner()
+            .get(&owner)
+            .unwrap_or(&HashSet::new())
+            .iter()
+            .filter_map(|token_id| {
+                self.token_metadata_by_id(*token_id)
+                    .map(|metadata| (*token_id, metadata))
+            })
+            .collect()
+    }
+}
+
+impl ExtendedService {
+    fn ensure_is_admin(&self) {
+        if !self.get().admins.contains(&msg::source()) {
+            panic!("Not admin")
+        };
+    }
+}
+impl AsRef<VnftService> for ExtendedService {
+    fn as_ref(&self) -> &VnftService {
+        &self.vnft
+    }
+}
+
+
+
+// ✅ USE `mint` and `burn` AS-IS.
+// These functions must be reused without modifications. Do not duplicate or change them.
+
+pub fn mint(
+    owner_by_id: &mut HashMap<TokenId, ActorId>,
+    tokens_for_owner: &mut HashMap<ActorId, HashSet<TokenId>>,
+    token_metadata_by_id: &mut HashMap<TokenId, TokenMetadata>,
+    token_id: &mut TokenId,
+    to: ActorId,
+    token_metadata: TokenMetadata,
+) -> Result<()> {
+    if token_metadata_by_id.contains_key(token_id) {
+        gstd::ext::panic("Token already exists".to_string())
+    }
+    owner_by_id.insert(*token_id, to);
+    tokens_for_owner.entry(to).or_insert_with(HashSet::new).insert(*token_id);
+    token_metadata_by_id.insert(*token_id, token_metadata);
+    let next = token_id.checked_add(U256::one())
+        .unwrap_or_else(|| gstd::ext::panic("TokenId overflow".to_string()));
+    *token_id = next;
+    Ok(())
+}
+
+pub fn burn(
+    owner_by_id: &mut HashMap<TokenId, ActorId>,
+    tokens_for_owner: &mut HashMap<ActorId, HashSet<TokenId>>,
+    token_approvals: &mut HashMap<TokenId, ActorId>,
+    token_metadata_by_id: &mut HashMap<TokenId, TokenMetadata>,
+    token_id: TokenId,
+) -> Result<()> {
+    
+    let owner = owner_by_id.remove(&token_id)
+        .ok_or_else(|| gstd::ext::panic("TokenDoesNotExist".to_string()))?;
+    if let Some(tokens) = tokens_for_owner.get_mut(&owner) {
+        tokens.remove(&token_id);
+        if tokens.is_empty() {
+            tokens_for_owner.remove(&owner);
+        }
+    }
+    token_approvals.remove(&token_id);
+    token_metadata_by_id.remove(&token_id);
+    Ok(())
+}
+
+// 🔒 END VNFT EXTENDED STANDARD BLOCK
+// Reuse without modification.

@@ -1,0 +1,22 @@
+
+// gear-hooks The example below shows how to obtain the query for a transaction
+
+import { useProgram, useProgramQuery } from '@gear-js/react-hooks';
+import { Program } from './lib';
+
+function State() {
+  const { data: program } = useProgram({
+    library: Program,
+    id: '0x...',
+  });
+
+  const { data } = useProgramQuery({
+    program,
+    serviceName: 'service',
+    functionName: 'query',
+    args: ['arg', 'anotherArg'],
+    watch: false, // If true, initializes a subscription to the program's state changes in the Gear MessagesDispatched event. Can increase network traffic.
+  });
+
+  return <div>{JSON.stringify(data)}</div>;
+}

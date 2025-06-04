@@ -1,0 +1,39 @@
+
+// gear-hooks The example below shows how to obtain the transactionFee for a transaction
+
+import { useProgram, usePrepareProgramTransaction } from '@gear-js/react-hooks';
+import { Program } from './lib';
+
+function LogTransactionFeeButton() {
+  const { data: program } = useProgram({
+    library: Program,
+    id: '0x...',
+  });
+
+  const { data, prepareTransactionAsync } = usePrepareProgramTransaction({
+    program,
+    serviceName: 'service',
+    functionName: 'function',
+  });
+
+  const handleClick = async () => {
+    const transaction = await prepareTransactionAsync({
+      args: ['arg', 'anotherArg'],
+      account: { addressOrPair: '0x...' }, 
+      value: 1000000n, 
+      gasLimit: 1000000000n, 
+      voucherId: '0x...',
+    });
+
+    const fee = await transaction.transactionFee();
+    console.log('fee: ', fee);
+  };
+
+  return (
+    <button type="button" onClick={handleClick}>
+      Log Transaction Fee
+    </button>
+  );
+}
+
+export { LogTransactionFeeButton };

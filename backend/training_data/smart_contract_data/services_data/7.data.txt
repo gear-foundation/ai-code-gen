@@ -1,0 +1,524 @@
+
+// services.rs for NFT Marketplace example
+
+#![no_std]
+#![allow(static_mut_refs)]
+
+use sails_rs::{
+    prelude::*,
+    gstd::msg,
+    collections::{HashMap, HashSet},
+};
+
+// Types for IDs and prices
+pub type ContractId = ActorId;
+pub type TokenId = U256;
+pub type Price = u128;
+
+// Minimum value accepted for sales in native VARA
+pub const MINIMUM_VALUE: u64 = 1_000_000_000_000;
+
+// Main storage for the marketplace
+pub static mut MARKET_STORAGE: Option<Market> = None;
+
+/// Structure for a listed item or auctionable NFT
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Item {
+    pub frozen: bool,                              // Is trade/auction suspended
+    pub token_id: TokenId,                         // NFT token Id
+    pub owner: ActorId,                            // Owner of the NFT
+    pub ft_contract_id: Option<ContractId>,        // FT contract for pricing; None for VARA
+    pub price: Option<Price>,                      // Sale price if listed (None if not on sale)
+    pub auction: Option<Auction>,                  // Ongoing auction (if present)
+    pub offers: Vec<((Option<ContractId>, Price), ActorId)>, // Offers list (bidder, prices)
+}
+
+/// Structure for an active auction on an item
+#[derive(Debug, PartialEq, Eq, Default, Clone, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct Auction {
+    pub started_at: u64,
+    pub ended_at: u64,
+    pub current_price: Price,
+    pub current_winner: ActorId,
+}
+
+/// Marketplace contract state struct
+#[derive(Debug, Default, Clone)]
+pub struct Market {
+    pub admin_id: ActorId,
+    pub items: HashMap<(ContractId, TokenId), Item>,
+    pub approved_nft_contracts: HashSet<ActorId>,
+    pub approved_ft_contracts: HashSet<ActorId>,
+}
+
+// Arguments for initializing the market contract
+#[derive(Debug, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct InitMarket {
+    pub admin_id: ActorId,
+    pub treasury_id: ActorId,
+    pub treasury_fee: u16,
+}
+
+// Arguments for querying item data
+#[derive(Debug, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct ItemInfoArgs {
+    pub nft_contract_id: ActorId,
+    pub token_id: TokenId,
+}
+
+// Structure representing a UI/API-friendly copy of an Item
+#[derive(Debug, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct ItemState {
+    pub frozen: bool,
+    pub token_id: TokenId,
+    pub owner: ActorId,
+    pub ft_contract_id: Option<ContractId>,
+    pub price: Option<Price>,
+    pub auction: Option<Auction>,
+    pub offers: Vec<((Option<ContractId>, Price), ActorId)>,
+}
+
+// Structure for contract state response
+#[derive(Debug, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct MarketState {
+    pub admin_id: ActorId,
+    pub items: Vec<((ContractId, TokenId), ItemState)>,
+    pub approved_nft_contracts: Vec<ActorId>,
+    pub approved_ft_contracts: Vec<ActorId>,
+}
+
+impl From<Market> for MarketState {
+    fn from(value: Market) -> Self {
+        let items = value
+            .items
+            .into_iter()
+            .map(|((contract_id, token_id), item)| {
+                (
+                    (contract_id, token_id),
+                    ItemState {
+                        frozen: item.frozen,
+                        token_id: item.token_id,
+                        owner: item.owner,
+                        ft_contract_id: item.ft_contract_id,
+                        price: item.price,
+                        auction: item.auction,
+                        offers: item.offers,
+                    },
+                )
+            })
+            .collect();
+        let approved_nft_contracts = value.approved_nft_contracts.iter().cloned().collect();
+        let approved_ft_contracts = value.approved_ft_contracts.iter().cloned().collect();
+        Self {
+            admin_id: value.admin_id,
+            items,
+            approved_nft_contracts,
+            approved_ft_contracts,
+        }
+    }
+}
+
+// All contract events
+#[derive(Debug, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum MarketEvent {
+    NftContractAdded(ContractId),
+    FtContractAdded(ContractId),
+    MarketDataAdded {
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+        price: Option<Price>,
+    },
+    MarketDataRemoved {
+        owner: ActorId,
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+    },
+    ItemSold {
+        owner: ActorId,
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+    },
+    BidAdded {
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+        price: Price,
+    },
+    AuctionCreated {
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+        price: Price,
+    },
+    AuctionSettled {
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+        price: Price,
+    },
+    AuctionCancelled {
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+    },
+    NFTListed {
+        nft_contract_id: ContractId,
+        owner: ActorId,
+        token_id: TokenId,
+        price: Option<Price>,
+    },
+    OfferAdded {
+        nft_contract_id: ContractId,
+        ft_contract_id: Option<ActorId>,
+        token_id: TokenId,
+        price: Price,
+    },
+    OfferAccepted {
+        nft_contract_id: ContractId,
+        token_id: TokenId,
+        new_owner: ActorId,
+        price: Price,
+    },
+    Withdraw {
+        nft_contract_id: ActorId,
+        token_id: TokenId,
+        price: Price,
+    },
+    TransactionFailed,
+    RerunTransaction,
+    TransferValue,
+}
+
+// Error variants for contract logic
+#[derive(Debug, Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum MarketErr {
+    NFTTransferFailed,
+    TokenTransferFailed,
+    WrongTransaction,
+    RerunTransaction,
+    WrongPrice,
+    InvalidCaller,
+    ItemOnAuction,
+    ItemDoesNotExists,
+    ItemIsNotOnSale,
+    AuctionBidPeriodOrDurationIsInvalid,
+    AuctionMinPriceIsZero,
+    AuctionIsAlreadyExists,
+    AuctionIsAlreadyEnded,
+    AuctionIsNotOver,
+    AuctionDoesNotExists,
+    AuctionIsOpened,
+    ContractNotApproved,
+    OfferAlreadyExists,
+    OfferShouldAcceptedByOwner,
+    OfferIsNotExists,
+}
+
+// Main service (program) struct
+#[derive(Default)]
+pub struct Service;
+
+impl Market {
+    // Utility: check if NFT contract is whitelisted
+    pub fn check_approved_nft_contract(&self, nft_contract_id: &ActorId) {
+        if !self.approved_nft_contracts.contains(nft_contract_id) {
+            panic!("NFT contract is not approved");
+        }
+    }
+    // Utility: check if FT contract is whitelisted if some
+    pub fn check_approved_ft_contract(&self, ft_contract_id: Option<ActorId>) {
+        if let Some(ft_id) = ft_contract_id {
+            if !self.approved_ft_contracts.contains(&ft_id) {
+                panic!("FT contract is not approved");
+            }
+        }
+    }
+    // Utility: only admin guard
+    pub fn check_admin(&self) {
+        if msg::source() != self.admin_id {
+            panic!("Only admin can perform this action");
+        }
+    }
+}
+
+impl Service {
+    // Seed/init: called once
+    pub fn seed(admin_id: ActorId) {
+        unsafe {
+            MARKET_STORAGE = Some(Market {
+                admin_id,
+                ..Default::default()
+            })
+        }
+    }
+}
+
+#[sails_rs::service(events = MarketEvent)]
+impl Service {
+    // Constructor
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Add an NFT contract to the approved list.
+    pub fn add_nft_contract(&mut self, nft_contract_id: ContractId) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        market.check_admin();
+        market.approved_nft_contracts.insert(nft_contract_id);
+        self.emit_event(MarketEvent::NftContractAdded(nft_contract_id)).expect("Event failed");
+    }
+
+    /// Add an FT contract to the approved list.
+    pub fn add_ft_contract(&mut self, ft_contract_id: ContractId) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        market.check_admin();
+        market.approved_ft_contracts.insert(ft_contract_id);
+        self.emit_event(MarketEvent::FtContractAdded(ft_contract_id)).expect("Event failed");
+    }
+
+    /// List or update a sale for an NFT by owner.
+    pub fn list_item(&mut self, nft_contract_id: ContractId, token_id: TokenId, price: Option<Price>, ft_contract_id: Option<ContractId>) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        market.check_approved_nft_contract(&nft_contract_id);
+        market.check_approved_ft_contract(ft_contract_id);
+
+        let caller = msg::source();
+        let key = (nft_contract_id, token_id);
+
+        let item = market.items.entry(key).or_insert(Item {
+            owner: caller,
+            token_id,
+            ft_contract_id,
+            price: None,
+            frozen: false,
+            auction: None,
+            offers: Vec::new(),
+        });
+
+        if item.owner != caller {
+            panic!("Only NFT owner can list it");
+        }
+        if item.auction.is_some() {
+            panic!("Can't change item; auction running");
+        }
+        item.ft_contract_id = ft_contract_id;
+        item.price = price;
+        self.emit_event(MarketEvent::NFTListed {
+            nft_contract_id,
+            owner: caller,
+            token_id,
+            price,
+        })
+        .expect("Event emit error");
+    }
+
+    /// Remove an item's listing. Only owner can remove.
+    pub fn remove_item(&mut self, nft_contract_id: ContractId, token_id: TokenId) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        let caller = msg::source();
+        let key = (nft_contract_id, token_id);
+        let Some(item) = market.items.get(&key) else { panic!("Item doesn't exist"); };
+        if item.owner != caller {
+            panic!("Only owner can remove");
+        }
+        if item.auction.is_some() {
+            panic!("Can't remove: auction running");
+        }
+        market.items.remove(&key);
+        self.emit_event(MarketEvent::MarketDataRemoved {
+            owner: caller,
+            nft_contract_id,
+            token_id,
+        })
+        .expect("Event error");
+    }
+
+    /// Make an offer for an item. Must be whitelisted FT or native token. Replaces old offer for price/ft/account.
+    pub fn make_offer(&mut self, nft_contract_id: ContractId, token_id: TokenId, price: Price, ft_contract_id: Option<ContractId>) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        market.check_approved_nft_contract(&nft_contract_id);
+        market.check_approved_ft_contract(ft_contract_id);
+
+        let caller = msg::source();
+        let key = (nft_contract_id, token_id);
+        let item = market.items.get_mut(&key).expect("Item doesn't exist");
+
+        // Remove old offer if it exists
+        item.offers.retain(|((ft, pr), acct)| {
+            !(ft == &ft_contract_id && *pr == price && *acct == caller)
+        });
+        item.offers.push(((ft_contract_id, price), caller));
+        self.emit_event(MarketEvent::OfferAdded {
+            nft_contract_id,
+            ft_contract_id,
+            token_id,
+            price,
+        })
+        .expect("Event error");
+    }
+
+    /// Accept an offer from a user
+    pub fn accept_offer(&mut self, nft_contract_id: ContractId, token_id: TokenId, offer_account: ActorId, price: Price, ft_contract_id: Option<ContractId>) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        let caller = msg::source();
+        let key = (nft_contract_id, token_id);
+
+        let item = market.items.get_mut(&key).expect("Item does not exist");
+        if item.owner != caller {
+            panic!("Only the owner can accept an offer");
+        }
+        let offer_pos = item
+            .offers
+            .iter()
+            .position(|((ft, pr), acct)| *acct == offer_account && ft.as_ref() == ft_contract_id.as_ref() && *pr == price)
+            .expect("Offer not found");
+        let _offer = item.offers.remove(offer_pos);
+        item.owner = offer_account;
+        item.price = None;
+        item.ft_contract_id = ft_contract_id;
+        self.emit_event(MarketEvent::OfferAccepted {
+            nft_contract_id,
+            token_id,
+            new_owner: offer_account,
+            price,
+        })
+        .expect("Event error");
+    }
+
+    /// Create an auction for an item
+    pub fn create_auction(&mut self, nft_contract_id: ContractId, token_id: TokenId, min_price: Price, duration: u64) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        let caller = msg::source();
+        let key = (nft_contract_id, token_id);
+        let item = market.items.entry(key).or_insert(Item {
+            owner: caller,
+            token_id,
+            ft_contract_id: None,
+            price: None,
+            frozen: false,
+            auction: None,
+            offers: Vec::new(),
+        });
+        if item.owner != caller {
+            panic!("Only owner can start auction");
+        }
+        if item.auction.is_some() {
+            panic!("Auction already exists");
+        }
+        let now = sails_rs::gstd::exec::block_timestamp();
+        item.auction = Some(Auction {
+            started_at: now,
+            ended_at: now.saturating_add(duration),
+            current_price: min_price,
+            current_winner: caller,
+        });
+        self.emit_event(MarketEvent::AuctionCreated {
+            nft_contract_id,
+            token_id,
+            price: min_price,
+        })
+        .expect("Event error");
+    }
+
+    /// Bid on an auction
+    pub fn bid(&mut self, nft_contract_id: ContractId, token_id: TokenId, bid_price: Price) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        let caller = msg::source();
+        let key = (nft_contract_id, token_id);
+        let item = market.items.get_mut(&key).expect("Item doesn't exist");
+        let auction = item.auction.as_mut().expect("No auction found");
+        let now = sails_rs::gstd::exec::block_timestamp();
+        if now >= auction.ended_at {
+            panic!("Auction ended");
+        }
+        if bid_price <= auction.current_price {
+            panic!("Bid too low");
+        }
+        auction.current_price = bid_price;
+        auction.current_winner = caller;
+        self.emit_event(MarketEvent::BidAdded {
+            nft_contract_id,
+            token_id,
+            price: bid_price,
+        })
+        .expect("Event error");
+    }
+
+    /// Settle auction and send item to winner.
+    pub fn settle_auction(&mut self, nft_contract_id: ContractId, token_id: TokenId) {
+        let market = unsafe { MARKET_STORAGE.as_mut().expect("State not initialized") };
+        let key = (nft_contract_id, token_id);
+        let item = market.items.get_mut(&key).expect("Item doesn't exist");
+        let auction = item.auction.as_ref().expect("Auction does not exist");
+        let now = sails_rs::gstd::exec::block_timestamp();
+        if now < auction.ended_at {
+            panic!("Auction is not over");
+        }
+        let winner = auction.current_winner;
+        let price = auction.current_price;
+        item.owner = winner;
+        item.price = Some(price);
+        item.auction = None;
+        self.emit_event(MarketEvent::AuctionSettled {
+            nft_contract_id,
+            token_id,
+            price,
+        })
+        .expect("Event error");
+    }
+
+    /// Query: get Item info
+    pub fn query_item(&self, nft_contract_id: ContractId, token_id: TokenId) -> Option<ItemState> {
+        let market = unsafe { MARKET_STORAGE.as_ref().expect("State not initialized") };
+        market.items.get(&(nft_contract_id, token_id)).map(|item| ItemState {
+            frozen: item.frozen,
+            token_id: item.token_id,
+            owner: item.owner,
+            ft_contract_id: item.ft_contract_id,
+            price: item.price,
+            auction: item.auction.clone(),
+            offers: item.offers.clone(),
+        })
+    }
+
+    /// Query: all items owned by an address
+    pub fn query_items_by_owner(&self, owner: ActorId) -> Vec<ItemState> {
+        let market = unsafe { MARKET_STORAGE.as_ref().expect("State not initialized") };
+        market
+            .items
+            .values()
+            .filter(|it| it.owner == owner)
+            .map(|item| ItemState {
+                frozen: item.frozen,
+                token_id: item.token_id,
+                owner: item.owner,
+                ft_contract_id: item.ft_contract_id,
+                price: item.price,
+                auction: item.auction.clone(),
+                offers: item.offers.clone(),
+            })
+            .collect()
+    }
+
+    /// Query: all allowed FT contract addresses
+    pub fn query_approved_ft_contracts(&self) -> Vec<ActorId> {
+        let market = unsafe { MARKET_STORAGE.as_ref().expect("State not initialized") };
+        market.approved_ft_contracts.iter().cloned().collect()
+    }
+
+    /// Query: complete contract state
+    pub fn query_state(&self) -> MarketState {
+        let market = unsafe { MARKET_STORAGE.as_ref().expect("State not initialized") };
+        market.clone().into()
+    }
+}

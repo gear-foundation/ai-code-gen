@@ -1,0 +1,105 @@
+
+// IDL example
+
+type Events = enum {
+  Initialized,
+  EnergySourceAdded: struct { str, u64 },
+  EnergyGenerated: struct { str, u64 },
+  Error: str,
+};
+
+type IoState = struct {
+  configured: bool,
+  energy_sources: vec struct { str, u64 },
+  total_energy_generated: u64,
+};
+
+constructor {
+  New : ();
+};
+
+service Service {
+  AddEnergySource : (source: str, capacity: u64) -> Events;
+  GenerateEnergy : (source: str, energy: u64) -> Events;
+  Initialize : (energy_sources: vec struct { str, u64 }) -> Events;
+  query QueryState : () -> IoState;
+};
+
+// script.ts example
+
+import express from 'express';
+import { GearApi } from '@gear-js/api';
+import { Keyring } from '@polkadot/api';
+import { Service, Program } from './lib.js';
+
+const app = express();
+const PORT = 3000;
+
+const keyring = new Keyring({ type: 'sr25519', ss58Format: 42 });
+const charlie = keyring.addFromUri('//Charlie');
+
+const programId = '0x......'; // Reemplaza con tu ID real
+
+let program: Program;
+let api: GearApi;
+
+(async () => {
+  api = await GearApi.create();
+  program = new Program(api, programId);
+
+  app.use(express.json());
+
+  app.post('/initialize', async (req, res) => {
+    try {
+      const transaction = await program.service
+        .initialize([{ str: 'Solar', u64: BigInt(1000) }])
+        .withAccount(charlie)
+        .calculateGas();
+      res.json({ gas: transaction.extrinsic['method']['args'][1].toString() });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/add-energy-source', async (req, res) => {
+    try {
+      const { source, capacity } = req.body;
+      const transaction = await program.service
+        .addEnergySource(source, BigInt(capacity))
+        .withAccount(charlie)
+        .calculateGas();
+      res.json({ gas: transaction.extrinsic['method']['args'][2].toString() });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/generate-energy', async (req, res) => {
+    try {
+      const { source, energy } = req.body;
+      const transaction = await program.service
+        .generateEnergy(source, BigInt(energy))
+        .withAccount(charlie)
+        .calculateGas();
+      res.json({ gas: transaction.extrinsic['method']['args'][2].toString() });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/state', async (_req, res) => {
+    try {
+      const state = await program.service.queryState();
+      res.json({
+        configured: state.configured,
+        total_energy_generated: state.total_energy_generated.toString(),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.listen(PORT, () => {
+    console.log(`Server is running at http://localhost:${PORT}`);
+  });
+})();

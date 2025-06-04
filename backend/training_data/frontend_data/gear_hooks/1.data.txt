@@ -1,0 +1,50 @@
+
+// react-hooks example
+
+import { useProgram, usePrepareProgramTransaction, useSendProgramTransaction } from '@gear-js/react-hooks';
+import { Program } from './lib';
+
+function SendPreparedTransaction() {
+  const { data: program } = useProgram({
+    library: Program,
+    id: '0x...',
+  });
+
+  const { prepareTransactionAsync } = usePrepareProgramTransaction({
+    program,
+    serviceName: 'service',
+    functionName: 'function',
+  });
+
+  const { sendTransactionAsync } = useSendProgramTransaction({
+    program,
+    serviceName: 'service',
+    functionName: 'function',
+  });
+
+  const handleClick = async () => {
+    const transaction = await prepareTransactionAsync({
+      args: ['arg', 'anotherArg'],
+      account: { addressOrPair: '0x...' }, 
+      value: 1000000n, 
+      gasLimit: 1000000000n, 
+      voucherId: '0x...',
+    });
+
+    const fee = await transaction.transactionFee();
+    console.log('fee: ', fee);
+
+    const result = await sendTransactionAsync(transaction);
+    const response = await result.response;
+
+    console.log('response: ', response);
+  };
+
+  return (
+    <button type="button" onClick={handleClick}>
+      Prepare and Send Transaction
+    </button>
+  );
+}
+
+export { SendPreparedTransaction };

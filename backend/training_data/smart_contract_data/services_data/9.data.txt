@@ -1,0 +1,356 @@
+
+// services.rs for Staking example
+
+#![no_std]
+#![allow(static_mut_refs)]
+
+use sails_rs::collections::HashMap;
+use sails_rs::gstd::{exec, msg};
+use sails_rs::prelude::*;
+use extended_vft_client::vft::io as vft_io;
+use sails_rs::calls::ActionIo; // Required import for encode_call usage
+
+/// Precision factor for reward calculation to handle integer math
+const DECIMALS_FACTOR: u128 = 1_000_000_000_000_000_000_00; // 1e20
+
+// Main storage (state) for the staking contract
+static mut STAKING_CONTRACT_STATE: Option<StakingState> = None;
+
+/// Struct representing information about a staker's staking and rewards
+#[derive(Debug, Default, Encode, Decode, TypeInfo, Clone, PartialEq, Eq)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct Staker {
+    pub balance: u128,            // Currently staked tokens
+    pub reward_allowed: u128,     // Rewards pending withdrawal
+    pub reward_debt: u128,        // Debt at last update for accurate tracking
+    pub distributed: u128,        // Rewards paid out already
+}
+
+/// All global contract state
+#[derive(Debug, Clone, Default)]
+pub struct StakingState {
+    pub owner: ActorId,
+    pub reward_token_address: ActorId, // Address of the reward FT
+    pub tokens_per_stake: u128,   // Accumulated reward per token
+    pub total_staked: u128,       // Total amount currently staked
+    pub distribution_time: u64,   // Period for reward distribution in seconds
+    pub produced_time: u64,       // When production started or last updated
+    pub reward_total: u128,       // Total reward for full period
+    pub all_produced: u128,       // Total reward produced so far
+    pub reward_produced: u128,    // Reward distributed to stakers so far
+    pub stakers: HashMap<ActorId, Staker>,
+}
+
+impl StakingState {
+    /// Initialize contract state
+    pub fn init(
+        owner: ActorId,
+        reward_token_address: ActorId,
+        distribution_time: u64,
+        reward_total: u128,
+    ) {
+        unsafe {
+            STAKING_CONTRACT_STATE = Some(StakingState {
+                owner,
+                reward_token_address,
+                distribution_time,
+                reward_total,
+                produced_time: exec::block_timestamp(),
+                ..Default::default()
+            });
+        }
+    }
+
+    /// Get mutable reference to state
+    pub fn state_mut() -> &'static mut StakingState {
+        let s = unsafe { STAKING_CONTRACT_STATE.as_mut() };
+        debug_assert!(s.is_some(), "State not initialized");
+        unsafe { s.unwrap_unchecked() }
+    }
+    /// Get immutable reference to state
+    pub fn state_ref() -> &'static StakingState {
+        let s = unsafe { STAKING_CONTRACT_STATE.as_ref() };
+        debug_assert!(s.is_some(), "State not initialized");
+        unsafe { s.unwrap_unchecked() }
+    }
+
+    /// Update produced rewards and tokens_per_stake to present time
+    pub fn update_reward(&mut self) {
+        let produced_now = self.produced();
+        if produced_now > self.reward_produced {
+            let produced_new = produced_now.saturating_sub(self.reward_produced);
+            if self.total_staked > 0 {
+                // update tokens_per_stake (high precision)
+                self.tokens_per_stake = self
+                    .tokens_per_stake
+                    .saturating_add((produced_new.saturating_mul(DECIMALS_FACTOR)) / self.total_staked);
+            }
+            self.reward_produced = self.reward_produced.saturating_add(produced_new);
+        }
+    }
+
+    /// Get total reward produced so far (linear vesting)
+    pub fn produced(&self) -> u128 {
+        let elapsed = exec::block_timestamp().saturating_sub(self.produced_time);
+
+        let vesting_time = if elapsed > self.distribution_time {
+            self.distribution_time
+        } else {
+            elapsed
+        };
+
+        self.all_produced
+            .saturating_add(self.reward_total.saturating_mul(vesting_time as u128) / self.distribution_time.max(1) as u128)
+    }
+
+    /// How much reward would the user have if fully withdrawn
+    pub fn get_max_reward(&self, amount: u128) -> u128 {
+        (amount.saturating_mul(self.tokens_per_stake)) / DECIMALS_FACTOR
+    }
+
+    /// Compute claimable reward for staker
+    pub fn calc_reward(&self, id: &ActorId) -> u128 {
+        match self.stakers.get(id) {
+            Some(st) => {
+                self.get_max_reward(st.balance)
+                    .saturating_add(st.reward_allowed)
+                    .saturating_sub(st.reward_debt)
+                    .saturating_sub(st.distributed)
+            }
+            None => 0u128,
+        }
+    }
+}
+
+/// Program event log type
+#[derive(Debug, Clone, Encode, Decode, TypeInfo, PartialEq, Eq)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub enum StakingEvent {
+    /// New tokens were staked
+    StakeAccepted(u128),
+    /// State updated (by admin)
+    Updated,
+    /// Reward paid
+    Reward(u128),
+    /// Unstaked tokens
+    Withdrawn(u128),
+}
+
+/// Queryable snapshot of state for RPC/API/explorer
+#[derive(Debug, Encode, Decode, TypeInfo, Clone)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct IoStakingState {
+    pub owner: ActorId,
+    pub reward_token_address: ActorId,
+    pub tokens_per_stake: u128,
+    pub total_staked: u128,
+    pub distribution_time: u64,
+    pub produced_time: u64,
+    pub reward_total: u128,
+    pub all_produced: u128,
+    pub reward_produced: u128,
+    pub stakers: Vec<(ActorId, Staker)>,
+}
+
+impl From<StakingState> for IoStakingState {
+    fn from(state: StakingState) -> Self {
+        // Auditor: Limit maximum number of stakers returned to 1000 to prevent DoS and overflow
+        let max_stakers = 1000;
+        let stakers_vec: Vec<(ActorId, Staker)> = state.stakers.into_iter().take(max_stakers).collect();
+
+        IoStakingState {
+            owner: state.owner,
+            reward_token_address: state.reward_token_address,
+            tokens_per_stake: state.tokens_per_stake,
+            total_staked: state.total_staked,
+            distribution_time: state.distribution_time,
+            produced_time: state.produced_time,
+            reward_total: state.reward_total,
+            all_produced: state.all_produced,
+            reward_produced: state.reward_produced,
+            stakers: stakers_vec,
+        }
+    }
+}
+
+/// Main Staking service/contract struct (for SAILS macro)
+#[derive(Default)]
+pub struct Service;
+
+impl Service {
+    /// Contract seed/init entrypoint
+    pub fn seed(
+        reward_token_address: ActorId,
+        distribution_time: u64,
+        reward_total: u128,
+    ) {
+        // Validate input params
+        if reward_total == 0 {
+            panic!("Reward is zero");
+        }
+        if distribution_time == 0 {
+            panic!("Distribution time is zero");
+        }
+        // Set initial state with msg::source() as the contract owner
+        StakingState::init(msg::source(), reward_token_address, distribution_time, reward_total);
+    }
+}
+
+#[sails_rs::service(events = StakingEvent)]
+impl Service {
+    /// Construct a new instance - not used except by SAILS macro runtime
+    pub fn new() -> Self { Self }
+
+    /// Lock tokens in the staking pool in exchange for rewards.
+    pub async fn stake(&mut self, amount: u128) -> StakingEvent {
+        if amount == 0 {
+            panic!("Amount is zero");
+        }
+        let msg_src = msg::source();
+
+        // Transfer tokens in from staker to staking pool
+        let state_addr = StakingState::state_ref().reward_token_address;
+        let request = vft_io::TransferFrom::encode_call(exec::program_id(), msg_src, amount.into());
+
+        // Simulate/assume extended_vft_client::vft::io like primitive call
+        msg::send_bytes_with_gas_for_reply(state_addr, request, 5_000_000_000, 0, 0)
+            .expect("Error sending a message")
+            .await
+            .expect("Token transfer failed");
+
+        let state = StakingState::state_mut();
+        state.update_reward();
+
+        let add_reward_debt = state.get_max_reward(amount);
+        state.stakers.entry(msg_src)
+            .and_modify(|stake| {
+                stake.balance = stake.balance.saturating_add(amount); // Auditor: safe addition to prevent overflow
+                stake.reward_debt = stake.reward_debt.saturating_add(add_reward_debt); // Auditor: safe addition
+            })
+            .or_insert(Staker {
+                balance: amount,
+                reward_debt: add_reward_debt,
+                ..Default::default()
+            });
+
+        state.total_staked = state.total_staked.saturating_add(amount); // Auditor: safe addition
+        self.emit_event(StakingEvent::StakeAccepted(amount)).expect("Notification error");
+        StakingEvent::StakeAccepted(amount)
+    }
+
+    /// Withdraw unlocked staked tokens.
+    pub async fn withdraw(&mut self, amount: u128) -> StakingEvent {
+        if amount == 0 {
+            panic!("Cannot withdraw zero");
+        }
+        let msg_src = msg::source();
+        let state = StakingState::state_mut();
+        state.update_reward();
+
+        let withdraw_debt = state.get_max_reward(amount);
+
+        let staker = state.stakers.get_mut(&msg_src).expect("Staker not found");
+        if staker.balance < amount {
+            panic!("Insufficient balance");
+        }
+        
+
+        // Transfer tokens out from contract to user
+        let request = vft_io::Transfer::encode_call(msg_src, amount.into());
+        msg::send_bytes_with_gas_for_reply(state.reward_token_address, request, 5_000_000_000, 0, 0)
+            .expect("Error sending")
+            .await
+            .expect("Error in transfer FT");
+
+        staker.balance = staker.balance.saturating_sub(amount); // Auditor: safe subtraction
+        staker.reward_allowed = staker.reward_allowed.saturating_add(withdraw_debt); // Auditor: safe addition
+        state.total_staked = state.total_staked.saturating_sub(amount); // Auditor: safe subtraction
+
+        self.emit_event(StakingEvent::Withdrawn(amount)).expect("Notification error");
+        StakingEvent::Withdrawn(amount)
+    }
+
+    /// Claim accrued reward for user.
+    pub async fn get_reward(&mut self) -> StakingEvent {
+        let msg_src = msg::source();
+        let state = StakingState::state_mut();
+        state.update_reward();
+
+        let reward = state.calc_reward(&msg_src);
+        if reward == 0 {
+            panic!("No reward to claim");
+        }
+
+        // Transfer reward tokens to user
+        let request = vft_io::Transfer::encode_call(msg_src, reward.into());
+
+        msg::send_bytes_with_gas_for_reply(state.reward_token_address, request, 5_000_000_000, 0, 0)
+            .expect("Error sending")
+            .await
+            .expect("Transfer failed");
+
+        if let Some(staker) = state.stakers.get_mut(&msg_src) {
+            staker.distributed = staker.distributed.saturating_add(reward); // Auditor: safe addition
+        }
+
+        self.emit_event(StakingEvent::Reward(reward)).expect("Notification error");
+        StakingEvent::Reward(reward)
+    }
+
+    /// Allow owner to update reward configuration.
+    pub fn update_staking(
+        &mut self,
+        reward_token_address: ActorId,
+        distribution_time: u64,
+        reward_total: u128,
+    ) -> StakingEvent {
+        if reward_total == 0 { panic!("Reward is zero"); }
+        if distribution_time == 0 { panic!("Distribution time is zero"); }
+        let msg_src = msg::source();
+        let state = StakingState::state_mut();
+        if msg_src != state.owner { panic!("Not owner"); }
+
+        state.reward_token_address = reward_token_address;
+        state.distribution_time = distribution_time;
+        state.update_reward();
+        state.all_produced = state.reward_produced;
+        state.produced_time = exec::block_timestamp();
+        state.reward_total = reward_total;
+
+        self.emit_event(StakingEvent::Updated).expect("Notification error");
+        StakingEvent::Updated
+    }
+
+    /// Query: contract owner
+    pub fn owner(&self) -> ActorId {
+        StakingState::state_ref().owner
+    }
+
+    /// Query: reward token address
+    pub fn reward_token_address(&self) -> ActorId {
+        StakingState::state_ref().reward_token_address
+    }
+
+    /// Query: per-token reward factor
+    pub fn tokens_per_stake(&self) -> u128 {
+        StakingState::state_ref().tokens_per_stake
+    }
+
+    /// Query: info for user, returns Staker struct or default if not present
+    pub fn query_staker(&self, user: ActorId) -> Staker {
+        StakingState::state_ref().stakers.get(&user).cloned().unwrap_or_default()
+    }
+
+    /// Query: all contract stats and user shares
+    pub fn query_state(&self) -> IoStakingState {
+        StakingState::state_ref().clone().into()
+    }
+
+    /// Query: how much reward can a user claim
+    pub fn claimable_reward(&self, user: ActorId) -> u128 {
+        StakingState::state_ref().calc_reward(&user)
+    }
+}

@@ -1,0 +1,165 @@
+
+// idl example
+
+type Events = enum {
+  Initialized,
+  EnergySourceAdded: struct { str, u64 },
+  EnergyGenerated: struct { str, u64 },
+  Error: str,
+};
+
+type IoState = struct {
+  configured: bool,
+  energy_sources: vec struct { str, u64 },
+  total_energy_generated: u64,
+};
+
+constructor {
+  New : ();
+};
+
+service Service {
+  AddEnergySource : (source: str, capacity: u64) -> Events;
+  GenerateEnergy : (source: str, energy: u64) -> Events;
+  Initialize : (energy_sources: vec struct { str, u64 }) -> Events;
+  query QueryState : () -> IoState;
+};
+
+
+
+// client example in ./client.ts
+
+import { TransactionBuilder, ActorId } from 'sails-js';
+import { GearApi, decodeAddress } from '@gear-js/api';
+import { TypeRegistry } from '@polkadot/types';
+
+type Events = {
+  Initialized?: {};
+  EnergySourceAdded?: { source: string; capacity: number };
+  EnergyGenerated?: { source: string; energy: number };
+  Error?: string;
+};
+
+type IoState = {
+  configured: boolean;
+  energy_sources: { source: string; capacity: number }[];
+  total_energy_generated: number;
+};
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly service: Service;
+
+  constructor(public api: GearApi, public programId?: `0x${string}`) {
+    const types: Record<string, any> = {
+      Events: {
+        _enum: {
+          Initialized: 'Null',
+          EnergySourceAdded: '(String, u64)',
+          EnergyGenerated: '(String, u64)',
+          Error: 'String',
+        },
+      },
+      IoState: {
+        configured: 'bool',
+        energy_sources: 'Vec<(String, u64)>',
+        total_energy_generated: 'u64',
+      },
+    };
+
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+
+    this.service = new Service(this);
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      ['New'],
+      '(String)',
+      'String',
+      code,
+    );
+
+    this.programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`) {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      ['New'],
+      '(String)',
+      'String',
+      codeId,
+    );
+
+    this.programId = builder.programId;
+    return builder;
+  }
+}
+
+
+export class Service {
+  constructor(private _program: Program) { }
+
+  public addEnergySource(source: string, capacity: number | string | bigint): TransactionBuilder<Events> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<Events>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'AddEnergySource', source, capacity],
+      '(String, String, String, U64)',
+      'Events',
+      this._program.programId
+    );
+  }
+
+  public generateEnergy(source: string, energy: number | string | bigint): TransactionBuilder<Events> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<Events>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'GenerateEnergy', source, energy],
+      '(String, String, String, U64)',
+      'Events',
+      this._program.programId
+    );
+  }
+
+  public initialize(energySources: Array<[string, number | string | bigint]>): TransactionBuilder<Events> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<Events>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'Initialize', energySources],
+      '(String, String, Vec<(String, U64)>)',
+      'Events',
+      this._program.programId
+    );
+  }
+
+  public async queryState(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<IoState> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'QueryState']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock || null,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, {"configured":"bool","energy_sources":"Vec<{"str":"String","u64":"U64"}>","total_energy_generated":"U64"})', reply.payload);
+    return result[2].toJSON() as unknown as IoState;
+  }
+}

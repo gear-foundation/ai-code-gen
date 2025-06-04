@@ -1,0 +1,180 @@
+
+
+// Example for Dynamic Non-Fungible Token
+
+
+// This is an extension of standard Vara Non-Fungible token. It proposes an additional dynamic part that can change or evolve over time.
+
+// The metadata of a token is defined by the TokenMetadata structure:
+
+pub struct TokenMetadata {
+    pub name: String,
+    pub description: String,
+    pub current_media_index: u64,
+    pub media: Vec<String>,
+    pub reference: String,
+}
+
+// Additional Functions
+  StartMetadataUpdate(updates_count, update_period_in_blocks, token_id)
+  UpdateMetadata(token_id, owner, update_period, updates_count)
+
+// Additional Events
+MetadataStartedUpdaing(updates_count, update_period_in_blocks, token_id);
+MetadataUpdated(token_id, current_media_index);
+
+
+// Additional Methods: 
+// 1. Start Metadata Update:This function starts a scheduled process to update the metadata of a specific token periodically. It validates the request, checks the token's ownership, and then initializes the metadata update sequence. If multiple updates are required, it schedules delayed messages to execute subsequent updates automatically.
+
+pub fn start_metadata_update(
+        &mut self,
+        updates_count: u32,
+        update_period_in_blocks: u32,
+        token_id: TokenId,
+    ) {
+        let msg_src = msg::source();
+        if updates_count == 0 {
+            panic!("Updates count cannot be zero")
+        }
+        if update_period_in_blocks == 0 {
+            panic!("Updates period cannot be zero")
+        }
+        panicking(|| {
+            start_metadata_updates(
+                self.get().gas_for_one_time_updating,
+                Storage::owner_by_id(),
+                &mut self.get_mut().token_metadata_by_id,
+                token_id,
+                msg_src,
+                updates_count,
+                update_period_in_blocks,
+            )
+        });
+        self.notify_on(Event::MetadataStartedUpdaing {
+            updates_count,
+            update_period_in_blocks,
+            token_id,
+        })
+        .expect("Notification Error");
+    }
+
+pub fn start_metadata_updates(
+    gas_for_one_time_updating: u64,
+    owner_by_id: &mut HashMap<TokenId, ActorId>,
+    token_metadata_by_id: &mut HashMap<TokenId, TokenMetadata>,
+    token_id: TokenId,
+    msg_src: ActorId,
+    updates_count: u32,
+    update_period: u32,
+) -> Result<()> {
+    let owner = owner_by_id.get(&token_id).ok_or(Error::TokenDoesNotExist)?;
+
+    if *owner != msg_src {
+        return Err(Error::DeniedAccess);
+    }
+    let metadata = token_metadata_by_id
+        .get_mut(&token_id)
+        .ok_or(Error::TokenDoesNotExist)?;
+    metadata.current_media_index =
+        metadata.current_media_index.saturating_add(1) % metadata.media.len() as u64;
+    if updates_count.saturating_sub(1) != 0 {
+        let request = [
+            "DynamicNft".encode(),
+            "UpdateMetadata".to_string().encode(),
+            (token_id, msg_src, update_period, updates_count - 1).encode(),
+        ]
+        .concat();
+        msg::send_bytes_with_gas_delayed(
+            exec::program_id(),
+            request,
+            gas_for_one_time_updating.saturating_mul(updates_count.into()),
+            0,
+            update_period,
+        )
+        .expect("Error in sending message");
+    }
+
+    Ok(())
+}
+
+// 2.Update Metadata:
+// This function handles the actual metadata update for a token. It cycles through available metadata options and triggers further updates if required. Ownership verification ensures that only authorized requests proceed.
+
+    pub fn update_metadata(
+        &mut self,
+        token_id: TokenId,
+        owner: ActorId,
+        update_period: u32,
+        updates_count: u32,
+    ) {
+        if msg::source() != exec::program_id() {
+            panic!("This message can only be sent by the programme")
+        }
+
+        let current_media_index = panicking(|| {
+            updates_metadata(
+                Storage::owner_by_id(),
+                &mut self.get_mut().token_metadata_by_id,
+                token_id,
+                owner,
+                update_period,
+                updates_count,
+            )
+        });
+        self.notify_on(Event::MetadataUpdated { token_id, current_media_index })
+            .expect("Notification Error");
+    }
+
+
+pub fn updates_metadata(
+    owner_by_id: &mut HashMap<TokenId, ActorId>,
+    token_metadata_by_id: &mut HashMap<TokenId, TokenMetadata>,
+    token_id: TokenId,
+    owner: ActorId,
+    update_period: u32,
+    updates_count: u32,
+) -> Result<u64> {
+    let current_owner = owner_by_id.get(&token_id).ok_or(Error::TokenDoesNotExist)?;
+
+    if owner != *current_owner {
+        return Err(Error::DeniedAccess);
+    }
+
+    let metadata = token_metadata_by_id
+        .get_mut(&token_id)
+        .ok_or(Error::TokenDoesNotExist)?;
+    metadata.current_media_index =
+        metadata.current_media_index.saturating_add(1) % metadata.media.len() as u64;
+
+    if updates_count.saturating_sub(1) != 0 {
+        let request = [
+            "DynamicNft".encode(),
+            "UpdateMetadata".to_string().encode(),
+            (token_id, owner, update_period, updates_count - 1).encode(),
+        ]
+        .concat();
+
+        msg::send_bytes_with_gas_delayed(
+            exec::program_id(),
+            request,
+            exec::gas_available().saturating_sub(1_000_000_000),
+            0,
+            update_period,
+        )
+        .expect("Error in sending message");
+    }
+
+    Ok(metadata.current_media_index )
+}
+
+pub fn panicking<T, E: Debug, F: FnOnce() -> Result<T, E>>(f: F) -> T {
+    match f() {
+        Ok(v) => v,
+        Err(e) => panic(e),
+    }
+}
+
+pub fn panic(err: impl Debug) -> ! {
+    ext::panic(format!("{err:?}"))
+}

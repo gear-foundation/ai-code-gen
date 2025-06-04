@@ -1,0 +1,332 @@
+
+// idl example
+
+type Events = enum {
+  MVPCreated,
+  VoteCasted,
+  MVPRemoved,
+  AdminAdded,
+  AdminRemoved,
+  MVPUpdated,
+};
+
+type Errors = enum {
+  Unauthorized,
+  MVPNotFound,
+  MaxAdminsReached,
+  MaxVotersReached,
+  MaxMVPsReached,
+  AlreadyVoted,
+  VotesOverflow,
+  MVPCountUnderflow,
+  MVPAlreadyExists,
+};
+
+type Mvp = struct {
+  id: u32,
+  owner: actor_id,
+  project_name: str,
+  description: str,
+  logo: str,
+  repository: str,
+  video_demo: str,
+  positive_votes: u32,
+  voter_wallets: vec actor_id,
+};
+
+type IoState = struct {
+  all_mvps: u64,
+  admins: vec actor_id,
+  mvps: vec Mvp,
+};
+
+constructor {
+  New : (admin: actor_id);
+};
+
+service Service {
+  AddAdmin : (new_admin: actor_id) -> result (Events, Errors);
+  AddMvp : (mvp: Mvp) -> result (Events, Errors);
+  RemoveAdmin : (admin_to_remove: actor_id) -> result (Events, Errors);
+  RemoveMvp : (mvp_id: u32) -> result (Events, Errors);
+  UpdateMvpInfo : (mvp_id: u32, updated_mvp: Mvp) -> result (Events, Errors);
+  VoteForMvp : (mvp_id: u32) -> result (Events, Errors);
+  query AllMvps : () -> u64;
+  query MvpsByActor : (actor_id: actor_id) -> vec Mvp;
+  query MvpsList : () -> IoState;
+};
+
+
+
+
+
+// client example in ./client.ts
+
+import { GearApi, decodeAddress } from '@gear-js/api';
+import { TypeRegistry } from '@polkadot/types';
+import { TransactionBuilder, ActorId, getServiceNamePrefix, getFnNamePrefix, ZERO_ADDRESS } from 'sails-js';
+
+const types = {
+  Events: {
+    _enum: [
+      'MVPCreated',
+      'VoteCasted',
+      'MVPRemoved',
+      'AdminAdded',
+      'AdminRemoved',
+      'MVPUpdated',
+    ],
+  },
+  Errors: {
+    _enum: [
+      'Unauthorized',
+      'MVPNotFound',
+      'MaxAdminsReached',
+      'MaxVotersReached',
+      'MaxMVPsReached',
+      'AlreadyVoted',
+      'VotesOverflow',
+      'MVPCountUnderflow',
+      'MVPAlreadyExists',
+    ],
+  },
+  Mvp: {
+    id: 'u32',
+    owner: '[u8;32]',
+    project_name: 'String',
+    description: 'String',
+    logo: 'String',
+    repository: 'String',
+    video_demo: 'String',
+    positive_votes: 'u32',
+    voter_wallets: 'Vec<[u8;32]>',
+  },
+  IoState: {
+    all_mvps: 'u64',
+    admins: 'Vec<[u8;32]>',
+    mvps: 'Vec<Mvp>',
+  },
+};
+
+export class Program {
+  public readonly registry: TypeRegistry;
+  public readonly service: Service;
+
+  constructor(public api: GearApi, private _programId?: `0x${string}`) {
+    this.registry = new TypeRegistry();
+    this.registry.setKnownTypes({ types });
+    this.registry.register(types);
+    this.service = new Service(this);
+  }
+
+  public get programId(): `0x${string}` {
+    if (!this._programId) throw new Error('Program ID is not set');
+    return this._programId;
+  }
+
+  newCtorFromCode(code: Uint8Array | Buffer, admin: ActorId): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'upload_program',
+      ['New', admin],
+      '(String, String, [u8;32])',
+      'String',
+      code,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+
+  newCtorFromCodeId(codeId: `0x${string}`, admin: ActorId): TransactionBuilder<null> {
+    const builder = new TransactionBuilder<null>(
+      this.api,
+      this.registry,
+      'create_program',
+      ['New', admin],
+      '(String, String, [u8;32])',
+      'String',
+      codeId,
+    );
+
+    this._programId = builder.programId;
+    return builder;
+  }
+}
+
+export class Service {
+  constructor(private _program: Program) {}
+
+  public addAdmin(new_admin: ActorId): TransactionBuilder<[string, string]> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<[string, string]>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'AddAdmin', new_admin],
+      '(String, String, [u8;32])',
+      'Result<Events, Errors>',
+      this._program.programId,
+    );
+  }
+
+  public addMvp(mvp: {
+    id: number;
+    owner: ActorId;
+    project_name: string;
+    description: string;
+    logo: string;
+    repository: string;
+    video_demo: string;
+    positive_votes: number;
+    voter_wallets: ActorId[];
+  }): TransactionBuilder<[string, string]> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<[string, string]>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      [
+        'Service',
+        'AddMvp',
+        {
+          id: mvp.id,
+          owner: mvp.owner,
+          project_name: mvp.project_name,
+          description: mvp.description,
+          logo: mvp.logo,
+          repository: mvp.repository,
+          video_demo: mvp.video_demo,
+          positive_votes: mvp.positive_votes,
+          voter_wallets: mvp.voter_wallets,
+        },
+      ],
+      '(String, String, Mvp)',
+      'Result<Events, Errors>',
+      this._program.programId,
+    );
+  }
+
+  public removeAdmin(admin_to_remove: ActorId): TransactionBuilder<[string, string]> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<[string, string]>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'RemoveAdmin', admin_to_remove],
+      '(String, String, [u8;32])',
+      'Result<Events, Errors>',
+      this._program.programId,
+    );
+  }
+
+  public removeMvp(mvp_id: number): TransactionBuilder<[string, string]> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<[string, string]>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'RemoveMvp', mvp_id],
+      '(String, String, u32)',
+      'Result<Events, Errors>',
+      this._program.programId,
+    );
+  }
+
+  public updateMvpInfo(mvp_id: number, updated_mvp: {
+    id: number;
+    owner: ActorId;
+    project_name: string;
+    description: string;
+    logo: string;
+    repository: string;
+    video_demo: string;
+    positive_votes: number;
+    voter_wallets: ActorId[];
+  }): TransactionBuilder<[string, string]> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<[string, string]>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      [
+        'Service',
+        'UpdateMvpInfo',
+        mvp_id,
+        {
+          id: updated_mvp.id,
+          owner: updated_mvp.owner,
+          project_name: updated_mvp.project_name,
+          description: updated_mvp.description,
+          logo: updated_mvp.logo,
+          repository: updated_mvp.repository,
+          video_demo: updated_mvp.video_demo,
+          positive_votes: updated_mvp.positive_votes,
+          voter_wallets: updated_mvp.voter_wallets,
+        }
+      ],
+      '(String, String, u32, Mvp)',
+      'Result<Events, Errors>',
+      this._program.programId,
+    );
+  }
+
+  public voteForMvp(mvp_id: number): TransactionBuilder<[string, string]> {
+    if (!this._program.programId) throw new Error('Program ID is not set');
+    return new TransactionBuilder<[string, string]>(
+      this._program.api,
+      this._program.registry,
+      'send_message',
+      ['Service', 'VoteForMvp', mvp_id],
+      '(String, String, u32)',
+      'Result<Events, Errors>',
+      this._program.programId,
+    );
+  }
+
+  public async allMvps(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<bigint> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'AllMvps']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock || null,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, u64)', reply.payload);
+    return result[2].toBigInt();
+  }
+
+  public async mvpsByActor(actor: ActorId, originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<Array<typeof types['Mvp']>> {
+    const payload = this._program.registry.createType('(String, String, [u8;32])', ['Service', 'MvpsByActor', actor]).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock || null,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, Vec<Mvp>)', reply.payload);
+    return result[2].toJSON() as unknown as Array<typeof types['Mvp']>;
+  }
+
+  public async mvpsList(originAddress?: string, value?: number | string | bigint, atBlock?: `0x${string}`): Promise<typeof types['IoState']> {
+    const payload = this._program.registry.createType('(String, String)', ['Service', 'MvpsList']).toHex();
+    const reply = await this._program.api.message.calculateReply({
+      destination: this._program.programId,
+      origin: originAddress ? decodeAddress(originAddress) : ZERO_ADDRESS,
+      payload,
+      value: value || 0,
+      gasLimit: this._program.api.blockGasLimit.toBigInt(),
+      at: atBlock || null,
+    });
+    if (!reply.code.isSuccess) throw new Error(this._program.registry.createType('String', reply.payload).toString());
+    const result = this._program.registry.createType('(String, String, IoState)', reply.payload);
+    return result[2].toJSON() as unknown as typeof types['IoState'];
+  }
+}

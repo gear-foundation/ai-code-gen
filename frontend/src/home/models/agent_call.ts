@@ -1,0 +1,1 @@
+export type AgentResponse = { answer: string, question: string } | { error: string, question: string };

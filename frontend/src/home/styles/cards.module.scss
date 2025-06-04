@@ -1,0 +1,38 @@
+.cardsContainer {
+    display: grid;
+    margin: auto;
+    margin-top: 10rem;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, auto);
+    padding: 0 15%;
+    gap: 8px;
+}
+
+.card {
+    border-radius: 10px;
+    min-height: 10rem;
+    border: solid 1px rgba(128, 128, 128, 0.13);
+    box-shadow: 1px -1px 12px 0px rgba(0,0,0,0.08);
+    -webkit-box-shadow: 1px -1px 12px 0px rgba(0,0,0,0.08);
+    -moz-box-shadow: 1px -1px 12px 0px rgba(0,0,0,0.08);
+}
+
+.cardData {
+    color: #58696E;
+}
+
+.titleCard {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background-color: #2A2A2A;
+    padding-left: 2rem;
+    padding-bottom: 2rem;
+
+    .title {
+        font-size: 25px;
+        font-weight: 550;
+        max-width: 20rem;
+        color: white;
+    }
+}

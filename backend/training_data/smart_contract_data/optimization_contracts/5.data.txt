@@ -1,0 +1,155 @@
+// service.rs arquitecture example
+
+// Always preserve and follow the architecture used in the service.rs file. Use the provided example only as a reference for structure and organization — do not repeat or duplicate its content.
+
+// necesary cretes
+  use sails_rs::{
+      prelude::*,
+      gstd::msg,
+      collections::HashMap,
+  };
+
+  // static mut variable (contract's state)
+pub static mut STATE: Option<State> = None;
+
+
+// Create a struct for the state
+#[derive(Clone, Default)]
+pub struct State {
+    pub admins: Vec<ActorId>,
+    pub all_users: HashMap<ActorId, String>,
+    pub register: HashMap<ActorId, CustomStruct>,
+     
+}
+
+// Struct para representar una denuncia
+#[derive(Encode, Decode, TypeInfo,Clone)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct CustomStruct {
+    pub user: ActorId,
+    pub description: String,
+}
+
+
+// Impl to set methods or related functions
+impl State {
+    // Method to create a new instance 
+    pub fn new() -> Self {
+        Self{..Default::default()}
+    }
+
+    // Related function to init the state
+    pub fn init_state() {
+        unsafe {
+            STATE = Some(Self::new());
+        };
+    }
+
+    // Related function to get the state as mut
+    pub fn state_mut() -> &'static mut State {
+        let state = unsafe { STATE.as_mut() };
+        debug_assert!(state.is_some(), "The state is not initialized");
+        unsafe { state.unwrap_unchecked() }
+    }
+
+    // Related function to get the state as ref
+    pub fn state_ref() -> &'static State {
+        let state = unsafe { STATE.as_ref() };
+        debug_assert!(state.is_some(), "The state is not initialized");
+        unsafe { state.unwrap_unchecked() }
+    }
+}
+
+// Create a struct that can be send to the user who reads state
+#[derive(Encode, Decode, TypeInfo)]
+#[codec(crate = sails_rs::scale_codec)]
+#[scale_info(crate = sails_rs::scale_info)]
+pub struct IoState {
+   pub admins: Vec<ActorId>,
+   pub all_users: Vec<(ActorId, String)>,
+   pub register:Vec<ActorId, CustomStruct>
+}
+
+#[derive(Debug, Decode, Encode, TypeInfo)]
+#[codec(crate = gstd::codec)]
+#[scale_info(crate = gstd::scale_info)]
+pub enum Errors {
+
+}
+
+impl From<State> for IoState {
+    fn from(value: State) -> Self {
+        let State {
+        admins,
+        all_users,
+        register
+        } = value;
+
+         // Perform some transformation on second field, cloning its elements (Warning: Just for HashMaps!!)
+      let all_users = all_users
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect();
+      
+      // Perform some transformation on second field, cloning its elements (Warning: Just for HashMaps!!)
+      let register = register.into_iter().collect();
+
+        Self {
+         admins,
+         all_users,
+         register
+        }
+    }
+}
+  
+
+  #[derive(Default)]
+  pub struct Service;
+
+  // Impl for seed related function to init the state
+  impl Service {
+      // Related function to init the service state (call only once)
+      // Another related function is created that initializes the state 
+      // to avoid unnecessary imports in the "lib.rs" file, you can see 
+      // that it remains more "structured"
+      pub fn seed() {
+          State::init_state();
+      }
+  }
+
+  #[service]
+  impl Service {
+      // Service constructor
+      pub fn new() -> Self {
+          Self
+      }
+
+      pub fn (&mut self, input: ) -> Events {
+
+          // Add Validations
+          
+
+          // Add your logic for example
+
+          // Change State
+
+          Events::
+      }
+
+      // Returns a struct that will be sent as a response to the user
+      // Is treated as a query, keeping everything unchanged and returning some data. (&self)
+      pub fn query(&self) -> IoState {
+        State::state_ref()
+              .to_owned()
+              .into()
+      }
+  }
+
+  // struct to use as a response to the user
+  #[derive(Encode, Decode, TypeInfo)]
+  #[codec(crate = sails_rs::scale_codec)]
+  #[scale_info(crate = sails_rs::scale_info)]
+  pub enum Events {
+
+  }

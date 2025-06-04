@@ -1,0 +1,38 @@
+
+
+import { useProgram, useSendProgramTransaction } from '@gear-js/react-hooks';
+import { Program } from './lib';
+
+function SendTransaction() {
+  const { data: program } = useProgram({
+    library: Program,
+    id: '0x...',
+  });
+
+  const { sendTransactionAsync } = useSendProgramTransaction({
+    program,
+    serviceName: 'service',
+    functionName: 'function',
+  });
+
+  const handleClick = async () => {
+    const result = await sendTransactionAsync({
+      args: ['arg', 'anotherArg'],
+      account: { addressOrPair: '0x...' }, // Defaults to the connected account from the extension if not provided
+      value: 1000000n, // Defaults to 0 if not provided
+      gasLimit: 1000000000n, // Automatically calculated if not provided
+      voucherId: '0x...', // If not provided, the transaction will be sent without a voucher
+    });
+
+    const response = await result.response;
+    console.log('response: ', response);
+  };
+
+  return (
+    <button type="button" onClick={handleClick}>
+      Send Transaction
+    </button>
+  );
+}
+
+export { SendTransaction };
