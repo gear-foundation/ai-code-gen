@@ -1,16 +1,12 @@
-import ReactDOM from "react-dom/client";
-import { App } from "./app";
-import dotenv from "dotenv";
-import { ChakraProvider } from "@chakra-ui/react";
-import { extendTheme } from "@chakra-ui/react";
-import './styles.scss';
-import '@fontsource/roboto/300.css';
-import '@fontsource/roboto/400.css';
-import '@fontsource/roboto/500.css';
-import '@fontsource/roboto/700.css';
+import ReactDOM from "react-dom/client"
+import { App } from "./app"
+import dotenv from "dotenv"
+import { ChakraProvider } from "@chakra-ui/react"
+import { extendTheme } from "@chakra-ui/react"
+import "@gear-js/vara-ui/dist/style.css"
+import "@/shared/assets/styles/index.scss"
 
-
-dotenv.config();
+dotenv.config()
 
 const colors = {
   brand: {
@@ -18,12 +14,12 @@ const colors = {
     800: "#153e75",
     700: "#2a69ac",
   },
-};
+}
 
-const theme = extendTheme({ colors });
+const theme = extendTheme({ colors })
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <ChakraProvider theme={theme}>
     <App />
   </ChakraProvider>
-);
+)

@@ -1,15 +1,14 @@
-import { Route, Routes, useLocation } from "react-router-dom";
-import { Home } from "@/home/pages/Home";
-// import { Home } from "@/pages/home";
-import { NotFound } from "@/NotFound/pages/NotFound";
+import { Route, Routes, useLocation } from "react-router-dom"
+import { Home } from "@/pages/home/pages/Home"
+import { NotFound } from "@/pages/NotFound/pages/NotFound"
 
 const routes = [
-  { path: '/', Page: Home },
-  { path: '/*', Page: NotFound }
-];
+  { path: "/", Page: Home },
+  { path: "/*", Page: NotFound },
+]
 
 function Routing() {
-  const location = useLocation();
+  const location = useLocation()
 
   return (
     <Routes location={location} key={location.pathname}>
@@ -17,7 +16,7 @@ function Routing() {
         <Route key={path} path={path} element={<Page />} />
       ))}
     </Routes>
-  );
+  )
 }
 
-export { Routing };
+export { Routing }
