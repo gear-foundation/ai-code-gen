@@ -1,7 +1,6 @@
 {
-  "name": "template",
+  "name": "vara-ai-codegen",
   "private": true,
-  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
