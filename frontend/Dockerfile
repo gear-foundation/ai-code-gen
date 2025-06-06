@@ -1,27 +1,32 @@
-FROM node:18-alpine
-
+# Stage 1: Dependencies installation
+FROM node:current-alpine AS deps
 WORKDIR /app
 
-# Copy package files
-COPY frontend/package.json .
-COPY frontend/yarn.lock .
-COPY frontend/.yarnrc.yml .
+COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./
 COPY frontend/.yarn/releases .yarn/releases
 
-# Install dependencies
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
-# Copy the rest of the frontend code
+# Stage 2: Build application
+FROM node:current-alpine AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ .
 
-# Build the application
+# Build with production environment
 RUN yarn build
 
-# Install serve to run the built application
+# Stage 3: Production image
+FROM node:current-alpine AS runner
+WORKDIR /app
+
+# Install only serve package for static file serving
 RUN npm install -g serve
 
-# Expose the port the app runs on
+# Copy only build files from builder stage
+COPY --from=builder /app/dist ./dist
+
 EXPOSE 3000
 
-# Serve the built application
-CMD ["serve", "-s", "build", "-l", "3000"]
+CMD ["serve", "-s", "dist", "-l", "3000"]

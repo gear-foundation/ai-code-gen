@@ -6,7 +6,7 @@
 
 .link{
     color: #FFF;
-}   
+}
 
 .dataContainer {
     display: flex;
@@ -23,7 +23,7 @@
     display: flex;
     gap: 1.5rem;
 
-    .icon > {
+    .icon > * {
         cursor: pointer !important;
     }
 }
