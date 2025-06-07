@@ -1,17 +1,16 @@
 import { withProviders } from "@/app/hocs"
+import { Footer } from "@/shared/ui/footer/footer"
+import { Header } from "@/shared/ui/header"
+
 import { Routing } from "./router/AppRoutes"
-import { Footer } from "@/shared/ui/Footer/Footer"
-import { Header } from "@/shared/ui/Header/Header"
 
 function Component() {
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header backgroundColor="black" />
-      <div className="grow">
-        <Routing />
-      </div>
+    <>
+      <Header />
+      <Routing />
       <Footer />
-    </div>
+    </>
   )
 }
 

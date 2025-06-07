@@ -1,0 +1,25 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.correctAuditMessageContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  .correctAuditMessageIcon {
+    --icon-size: 25px;
+    height: var(--icon-size);
+    width: var(--icon-size);
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.button {
+  padding: 5px 20px !important;
+  font-weight: 500 !important;
+}

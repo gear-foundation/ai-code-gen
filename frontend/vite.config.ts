@@ -1,11 +1,12 @@
-import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react-swc"
 import path from "path"
-import nodePolyfills from "vite-plugin-node-stdlib-browser"
+import tailwindcss from "@tailwindcss/vite"
+import react from "@vitejs/plugin-react-swc"
+import { defineConfig } from "vite"
 import eslint from "vite-plugin-eslint"
+import nodePolyfills from "vite-plugin-node-stdlib-browser"
 import svgr from "vite-plugin-svgr"
-import wasm from "vite-plugin-wasm"
 import topLevelAwait from "vite-plugin-top-level-await"
+import wasm from "vite-plugin-wasm"
 
 export default defineConfig({
   resolve: {
@@ -66,12 +67,11 @@ export default defineConfig({
   plugins: [
     svgr({
       include: "**/*.svg",
-      exclude: "",
       svgrOptions: {
+        exportType: "named",
         ref: true,
+        svgo: false,
         titleProp: true,
-        svgo: true,
-        expandProps: "start",
       },
     }),
     react(),
@@ -79,6 +79,7 @@ export default defineConfig({
     eslint(),
     wasm(),
     topLevelAwait(),
+    tailwindcss(),
   ],
   server: {
     host: "0.0.0.0",

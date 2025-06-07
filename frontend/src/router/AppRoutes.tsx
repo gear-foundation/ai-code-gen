@@ -1,6 +1,6 @@
+import { Home } from "@/pages/home"
+import { NotFound } from "@/pages/not-found"
 import { Route, Routes, useLocation } from "react-router-dom"
-import { Home } from "@/pages/home/pages/Home"
-import { NotFound } from "@/pages/NotFound/pages/NotFound"
 
 const routes = [
   { path: "/", Page: Home },

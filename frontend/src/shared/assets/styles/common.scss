@@ -1,11 +1,5 @@
-html {
-  scroll-behavior: smooth;
-}
-
 body {
   font-family: 'Geist', sans-serif !important;
-  color: #000;
-  background-color: #fff;
   font-variant-numeric: lining-nums proportional-nums;
 
   @supports not (font-variation-settings: 'wdth' 115) {

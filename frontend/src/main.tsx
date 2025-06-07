@@ -1,12 +1,11 @@
 import ReactDOM from "react-dom/client"
+import { ChakraProvider, extendTheme } from "@chakra-ui/react"
+
 import { App } from "./app"
-import dotenv from "dotenv"
-import { ChakraProvider } from "@chakra-ui/react"
-import { extendTheme } from "@chakra-ui/react"
+
 import "@gear-js/vara-ui/dist/style.css"
 import "@/shared/assets/styles/index.scss"
-
-dotenv.config()
+import "@/styles.css"
 
 const colors = {
   brand: {
