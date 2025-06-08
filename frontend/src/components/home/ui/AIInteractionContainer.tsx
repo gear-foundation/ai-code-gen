@@ -1,7 +1,4 @@
 import React from "react"
-import { GrayContainer } from "@/shared/ui/Containers/GrayContainer/GrayContainer"
-
-import styles from "../styles/ai_interaction_container.module.scss"
 
 interface Props {
   interactionTitle: string
@@ -9,16 +6,14 @@ interface Props {
   children?: React.ReactNode
 }
 
-export const AIInteractionContainer = ({ interactionTitle, leftSideChildren, children }: Props) => {
+export function AIInteractionContainer({ interactionTitle, leftSideChildren, children }: Props) {
   return (
-    <div className="size-full">
-      <GrayContainer className="min-h-[20rem] w-full p-5 pt-0">
-        <div className={styles.textAreaData}>
-          <h3 className={styles.interactionTitle}>{interactionTitle}</h3>
-          <div className={styles.buttonsContainer}>{leftSideChildren}</div>
-        </div>
-        {children}
-      </GrayContainer>
+    <div className="flex w-full flex-col gap-8 rounded-xl bg-background p-6 shadow-[0px_64px_194px_0px,_inset_0px_0.4px_1.2px_0_var(--color-foreground)] shadow-foreground/10">
+      <div className="flex items-center justify-between gap-6">
+        <h3 className="font-medium text-muted">{interactionTitle}</h3>
+        <div className="flex gap-4">{leftSideChildren}</div>
+      </div>
+      {children}
     </div>
   )
 }

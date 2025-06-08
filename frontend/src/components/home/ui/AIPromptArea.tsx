@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react"
-import { AddIcon, CorrectIcon } from "@/shared/assets/images"
-import { Textarea, useClipboard } from "@chakra-ui/react"
+import { CorrectIcon } from "@/shared/assets/images"
+import { useClipboard } from "@/shared/hooks/use-clipboard"
+import { cn } from "@/shared/utils/cn"
 import { useAlert } from "@gear-js/react-hooks"
-import { Button, Select } from "@gear-js/vara-ui"
+import { Button, buttonStyles, Select, Textarea } from "@gear-js/vara-ui"
 import clsx from "clsx"
 
 import { GitpodIcon } from "../assets"
@@ -48,7 +49,6 @@ export const AIPromptArea = ({
   const fileRef = useRef<string | null>(null)
   const rustLibFileRef = useRef<string | null>(null)
   const rustServiceFileRef = useRef<string | null>(null)
-  const aRef = useRef<HTMLAnchorElement | null>(null)
   const [promptText, setPromptText] = useState(defaultPrompt)
   const [idlName, setIdlName] = useState<string | null>(null)
 
@@ -108,12 +108,6 @@ export const AIPromptArea = ({
     onSubmitPrompt(promptText, fileRef.current, true)
   }
 
-  const handleAnchorCLick = () => {
-    if (!aRef.current) return
-
-    aRef.current.click()
-  }
-
   useEffect(() => {
     setPromptText(defaultPrompt)
   }, [defaultPrompt])
@@ -123,53 +117,17 @@ export const AIPromptArea = ({
       interactionTitle="PROMPT"
       leftSideChildren={
         <>
-          {optionVariants && (
-            <Select
-              className={styles.selectFrontendOptions}
-              disabled={disableComponents}
-              value={optionVariantSelected}
-              onChange={(e) => {
-                const indexVariantSelected = optionVariants.indexOf(e.target.value)
-                const variantSelected = optionVariants[indexVariantSelected] as AIJavascriptComponentsOptions
-                onOptionVariantSelected(variantSelected)
-              }}
-              options={optionVariants.map((value) => {
-                return {
-                  label: value,
-                  value,
-                  // selected: value === optionVariantSelected,
-                }
-              })}
-            />
-          )}
-          {updateContractButtonEnable && (
-            <>
-              <Button
-                text="Audit"
-                size="x-large"
-                isLoading={disableComponents}
-                disabled={codeAlreadyAudited}
-                onClick={handleOnAuditContract}
-                className={clsx(styles.button, styles.buttonGreen)}
-              />
-              <Button
-                text="Update"
-                size="x-large"
-                isLoading={disableComponents}
-                onClick={handleOnUpdateContract}
-                className={clsx(styles.button, styles.buttonGreen)}
-              />
-            </>
-          )}
           <Button
-            text="Generate"
-            size="x-large"
+            text={hasCopied ? "" : "Clone repository"}
+            size={"x-small"}
+            icon={hasCopied ? CorrectIcon : undefined}
+            color="grey"
             isLoading={disableComponents}
-            onClick={handleOnSubmitPrompt}
-            className={clsx(styles.button, styles.buttonGreen)}
+            className={""}
+            onClick={onCopy}
           />
+
           <a
-            ref={aRef}
             href={
               optionSelected === "Frontend"
                 ? "https://gitpod.io/new/#https://github.com/Vara-Lab/dapp-template.git"
@@ -183,47 +141,26 @@ export const AIPromptArea = ({
                       : "https://gitpod.io/new/#https://github.com/Vara-Lab/dapp-template.git"
             }
             target="_blank"
-            style={{ display: "none" }} rel="noreferrer"
-          />
-
-          <Button
-            text="Open in Gitpod"
-            icon={GitpodIcon}
-            color="contrast"
-            isLoading={disableComponents}
-            className={clsx(styles.button)}
-            onClick={handleAnchorCLick}
-          />
-
-          <Button
-            text={hasCopied ? "" : "Copy repository"}
-            icon={hasCopied ? CorrectIcon : undefined}
-            color="contrast"
-            isLoading={disableComponents}
-            className={clsx([styles.button, styles.buttonFixedSizeCopyRepo])}
-            onClick={onCopy}
-          />
-
-          <ButtonUploadIDL onIDLFileSubmit={handleSubmitIDL} disableButton={disableComponents} />
-          <p className={styles.idlName}>{idlName ? idlName : ""}</p>
+            rel="noreferrer"
+            className={cn(buttonStyles.button, buttonStyles.transparent, buttonStyles["x-small"], "leading-none")}
+          >
+            <GitpodIcon className="*:fill-current *:text-current" />
+            Open in Gitpod
+          </a>
         </>
       }
     >
       <Textarea
-        focusBorderColor="green.400"
-        borderColor="gray.200"
-        backgroundColor="white"
-        borderRadius={14}
-        padding="30px 30px"
-        resize="none"
-        disabled={disableComponents}
-        flex={1}
-        placeholder="Add your instruction"
         value={promptText}
         onChange={handlePromptText}
+        disabled={disableComponents}
+        placeholder="Add your instruction"
+        name="prompt"
+        rows={0}
+        className="flex min-h-40 grow flex-col *:grow *:!rounded-[10px] *:bg-background"
       />
-      {optionSelected == "Smart Contracts" && (
-        <div className={styles.contractButtonsAdditionContainer}>
+      {optionSelected === "Smart Contracts" && (
+        <div className="flex items-center justify-end gap-4">
           <ButtonUploadRustCode
             title="Add service.rs"
             onRustFileSubmit={handleSubmitServiceRustFIle}
@@ -236,6 +173,47 @@ export const AIPromptArea = ({
           />
         </div>
       )}
+
+      <div className="flex items-center gap-4">
+        {optionVariants && (
+          <Select
+            name={"Variants"}
+            size={"large"}
+            className="*:bg-background *:!py-1.25"
+            disabled={disableComponents}
+            value={optionVariantSelected}
+            onChange={(e) => {
+              const indexVariantSelected = optionVariants.indexOf(e.target.value)
+              const variantSelected = optionVariants[indexVariantSelected] as AIJavascriptComponentsOptions
+              onOptionVariantSelected(variantSelected)
+            }}
+            options={optionVariants.map((value) => {
+              return {
+                label: value,
+                value,
+                // selected: value === optionVariantSelected,
+              }
+            })}
+          />
+        )}
+        {updateContractButtonEnable && (
+          <>
+            <Button
+              text="Audit"
+              size={"x-small"}
+              isLoading={disableComponents}
+              disabled={codeAlreadyAudited}
+              onClick={handleOnAuditContract}
+            />
+            <Button text="Update" size={"x-small"} isLoading={disableComponents} onClick={handleOnUpdateContract} />
+          </>
+        )}
+        <Button text="Generate" size={"x-small"} isLoading={disableComponents} onClick={handleOnSubmitPrompt} />
+
+        <ButtonUploadIDL onIDLFileSubmit={handleSubmitIDL} disableButton={disableComponents} />
+
+        {idlName && <p className={styles.idlName}>{idlName}</p>}
+      </div>
     </AIInteractionContainer>
   )
 }

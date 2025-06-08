@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { CopyIcon, CorrectIcon, GreenCorrectIcon } from "@/shared/assets/images"
-import { Text, useClipboard } from "@chakra-ui/react"
+import { useClipboard } from "@/shared/hooks/use-clipboard"
 import { useAlert } from "@gear-js/react-hooks"
 import { Button } from "@gear-js/vara-ui"
 
@@ -24,7 +24,6 @@ import styles from "../styles/ai_section.module.scss"
 import { AIOptionSelection } from "./AIOptionSelection"
 import { AIPromptArea } from "./AIPromptArea"
 import { AIResponse } from "./AIResponse"
-import { VoiceRecorderButton } from "./VoiceRecording"
 
 type AgentCode = string | null
 
@@ -64,25 +63,6 @@ const AIAbstractionComponentsOptions = [
   "GasLess/Server",
   "GasLess/ez-transactions",
   "SignLess/ez-transactions",
-]
-
-const CHECKOUT_STEPS = [
-  {
-    name: "Customer Info",
-    Component: () => <div>Provide your contact details.</div>,
-  },
-  {
-    name: "Shipping Info",
-    Component: () => <div>Enter your shipping address.</div>,
-  },
-  {
-    name: "Payment",
-    Component: () => <div>Complete payment for your order.</div>,
-  },
-  {
-    name: "Delivered",
-    Component: () => <div> Your order has been delivered.</div>,
-  },
 ]
 
 export const AISection = () => {
@@ -420,7 +400,7 @@ export const AISection = () => {
   }, [optionSelected])
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
       <AIOptionSelection
         options={options}
         selected={handleSelected}

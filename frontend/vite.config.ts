@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
+      "@public": path.resolve(__dirname, "public"),
       // Необходимые алиасы для поддержки Polkadot
       crypto: "crypto-browserify",
       stream: "stream-browserify",

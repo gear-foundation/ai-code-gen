@@ -1,8 +1,18 @@
 import React, { useEffect, useState } from "react"
-import { Button, Icon, Tooltip, Text, Box, Select, HStack } from "@chakra-ui/react"
-import { FaMicrophone, FaMicrophoneSlash } from "react-icons/fa"
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition"
+import {
+  Box,
+  Button,
+  HStack,
+  Icon,
+  Text,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/shared/ui/voice-record"
 import { useAlert } from "@gear-js/react-hooks"
+import { Mic, MicOff } from "lucide-react"
+import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition"
 
 interface VoiceRecorderButtonProps {
   onResult: (text: string) => void
@@ -21,7 +31,7 @@ function getBrowserLanguage(): string {
   return languageOptions.find((opt) => opt.code === lang) ? lang : "en-US"
 }
 
-function VoiceRecorderButton({ onResult }: VoiceRecorderButtonProps) {
+export function VoiceRecorderButton({ onResult }: VoiceRecorderButtonProps) {
   const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } = useSpeechRecognition()
   const gearAlert = useAlert()
 
@@ -73,75 +83,53 @@ function VoiceRecorderButton({ onResult }: VoiceRecorderButtonProps) {
   }
 
   return (
-    <HStack
-      spacing={4}
-      // align="start"
-      // align='start'
-      w="71%"
-    >
-      <HStack spacing={3}>
-        <Tooltip label={listening ? "Stop recording" : "Start recording"} hasArrow>
-          <Button
-            onClick={handleClick}
-            size="lg"
-            p={4}
-            bg={listening ? "black" : "white"}
-            color={listening ? "white" : "black"}
-            border="2px solid"
-            borderColor="gray.700"
-            boxShadow="lg"
-            transition="all 0.3s ease-in-out"
-            _hover={{
-              transform: "scale(1.05)",
-              bg: listening ? "gray.800" : "gray.100",
-            }}
-            _active={{
-              transform: "scale(0.98)",
-              boxShadow: "inset 0 0 10px rgba(255,255,255,0.1)",
-            }}
+    <TooltipProvider>
+      <HStack spacing={4} className="w-[71%]">
+        <HStack spacing={3}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleClick}
+                size="lg"
+                className={`border-2 p-4 shadow-lg transition-all duration-300 ease-in-out hover:scale-105 active:scale-98 ${
+                  listening
+                    ? "border-gray-700 bg-black text-white hover:bg-gray-800"
+                    : "border-gray-700 bg-white text-black hover:bg-gray-100"
+                } `}
+              >
+                <Icon as={listening ? MicOff : Mic} size={24} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <Text size="sm">{listening ? "Stop recording" : "Start recording"}</Text>
+            </TooltipContent>
+          </Tooltip>
+
+          <select
+            className="w-40 rounded-md border border-gray-500 bg-white px-3 py-2 text-sm"
+            value={selectedLanguage}
+            onChange={(e) => setSelectedLanguage(e.target.value)}
           >
-            <Icon as={listening ? FaMicrophoneSlash : FaMicrophone} boxSize={6} />
-          </Button>
-        </Tooltip>
+            {languageOptions.map((lang) => (
+              <option key={lang.code} value={lang.code}>
+                {lang.label}
+              </option>
+            ))}
+          </select>
+        </HStack>
 
-        <Select
-          size="sm"
-          value={selectedLanguage}
-          onChange={(e) => setSelectedLanguage(e.target.value)}
-          borderColor="gray.500"
-          w="160px"
-        >
-          {languageOptions.map((lang) => (
-            <option key={lang.code} value={lang.code}>
-              {lang.label}
-            </option>
-          ))}
-        </Select>
+        {listening && (
+          <Box className="w-full max-w-[81%] rounded-md border border-white/20 bg-black/70 p-4 font-mono shadow-md">
+            <Text size="sm" className="mb-1 font-semibold text-green-300">
+              🎙️ Voice Input Active
+            </Text>
+
+            <Text size="sm" className="line-clamp-4 whitespace-pre-wrap text-white/90">
+              {transcript || getListeningMessage()}
+            </Text>
+          </Box>
+        )}
       </HStack>
-
-      {listening && (
-        <Box
-          bg="blackAlpha.700"
-          border="1px solid"
-          borderColor="whiteAlpha.200"
-          borderRadius="md"
-          p={4}
-          w="100%"
-          maxW="81%"
-          boxShadow="md"
-          fontFamily="mono"
-        >
-          <Text fontSize="sm" color="green.300" fontWeight="semibold" mb={1}>
-            🎙️ Voice Input Active
-          </Text>
-
-          <Text fontSize="sm" color="whiteAlpha.900" noOfLines={4} whiteSpace="pre-wrap">
-            {transcript || getListeningMessage()}
-          </Text>
-        </Box>
-      )}
-    </HStack>
+    </TooltipProvider>
   )
 }
-
-export { VoiceRecorderButton }

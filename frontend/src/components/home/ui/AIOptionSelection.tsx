@@ -1,24 +1,13 @@
 import { useState } from "react"
-import { GrayContainer } from "@/shared/ui/Containers/GrayContainer/GrayContainer"
-import { WhiteContainer } from "@/shared/ui/Containers/WhiteContainer/WhiteContainer"
-import clsx from "clsx"
+import { cn } from "@/shared/utils/cn"
 
 import type { AIPromptOptions } from "../models/ai_options"
-import styles from "../styles/ai_option_selection.module.scss"
 
 interface Props {
   options: string[]
   currentSelected: AIPromptOptions
   waitingForResponse?: boolean
   selected?: (name: string, id: AIPromptOptions) => void
-}
-
-const whiteContainerStyles = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  minWidth: "10.5rem",
-  transition: "all ease-in-out 0.2s",
 }
 
 export const AIOptionSelection = ({
@@ -30,39 +19,30 @@ export const AIOptionSelection = ({
   const [optionSelected, setOptionSelected] = useState<AIPromptOptions>(currentSelected)
 
   return (
-    <div>
-      <GrayContainer className="flex rounded-xl p-1">
-        {options.map((value, index) => (
-          <WhiteContainer
+    <div className="mx-auto flex w-fit gap-px rounded-xl bg-zinc-100 p-1 shadow-[inset_0px_0.4px_1.2px_0] shadow-foreground/20">
+      {options.map((value, index) => {
+        const isSelected = optionSelected === (options[index] as AIPromptOptions)
+
+        return (
+          <button
             key={index}
             onClick={() => {
               if (waitingForResponse) return
               setOptionSelected(options[index] as AIPromptOptions)
               selected(value, options[index] as AIPromptOptions)
             }}
-            style={
-              optionSelected == (options[index] as AIPromptOptions)
-                ? whiteContainerStyles
-                : {
-                    ...whiteContainerStyles,
-                    background: "none",
-                    boxShadow: "none",
-                    cursor: waitingForResponse ? "not-allowed" : "pointer",
-                  }
-            }
+            className={cn(
+              "cursor-pointer rounded-xl px-5 py-1.25 font-semibold",
+              isSelected
+                ? "rounded-[10px] bg-background shadow-[0_0.4px_1.2px_0] shadow-foreground/20"
+                : "text-muted transition-colors hover:text-foreground",
+              waitingForResponse && "cursor-not-allowed"
+            )}
           >
-            <p
-              className={clsx(
-                styles.text,
-                optionSelected != (options[index] as AIPromptOptions) && styles.textUnSelected,
-                optionSelected != (options[index] as AIPromptOptions) && waitingForResponse && styles.cursorNotAllowed
-              )}
-            >
-              {value}
-            </p>
-          </WhiteContainer>
-        ))}
-      </GrayContainer>
+            {value}
+          </button>
+        )
+      })}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { withProviders } from "@/app/hocs"
-import { Footer } from "@/shared/ui/footer/footer"
+import { Footer } from "@/shared/ui/footer"
 import { Header } from "@/shared/ui/header"
 
 import { Routing } from "./router/AppRoutes"

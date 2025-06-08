@@ -7,6 +7,7 @@
   --color-brand-600: oklch(0.771 0.1533 168.7);
   --color-background: oklch(1 0 0);
   --color-foreground: oklch(0 0 0);
+  --color-muted: oklch(0.5085 0.022 217.45);
 }
 
 

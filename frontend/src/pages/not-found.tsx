@@ -1,5 +1,4 @@
 import { ROUTES } from "@/app/consts"
-import { Heading } from "@chakra-ui/react"
 import { Button } from "@gear-js/vara-ui"
 import { useNavigate } from "react-router-dom"
 
@@ -16,7 +15,7 @@ export const NotFound = () => {
           <img className="absolute inset-0 size-full" src={ImageBase} alt="Page Not Found" />
         </div>
         <div className={styles.header}>
-          <Heading size="lg">Page not found</Heading>
+          <p className="text-[48px] leading-[1.2] font-bold">Page not found</p>
         </div>
         <Button
           onClick={() => {
