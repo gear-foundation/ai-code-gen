@@ -116,7 +116,7 @@ export function AIPromptArea({
       leftSideChildren={
         <>
           <Button
-            text={hasCopied ? "" : "Fork repo"}
+            text={hasCopied ? "" : "Copy repo link"}
             size={"x-small"}
             icon={hasCopied ? CorrectIcon : undefined}
             color="grey"
