@@ -6,7 +6,7 @@ import { DiscordIcon, GitHubIcon, MediumIcon, TelegramIcon, XIcon } from "./foot
 
 export const Footer = () => {
   return (
-    <footer className="flex flex-col bg-background py-10 [clip-path:polygon(72%_5%,100%_0,100%_100%,0_100%,0_0)] md:pb-20">
+    <footer className="flex flex-col bg-background py-10 [clip-path:polygon(82%_1%,100%_0,100%_100%,0_100%,0_0)] md:pb-20 md:[clip-path:polygon(72%_5%,100%_0,100%_100%,0_100%,0_0)]">
       <div className="border-b border-foreground/5 pb-2">
         <div className="container">
           <div className="flex gap-4 pt-5 md:gap-3">
