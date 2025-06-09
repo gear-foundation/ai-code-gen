@@ -14,12 +14,24 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ .
 
+ARG VITE_NODE_ADDRESS
+ARG VITE_BACKEND_ADDRESS
+
+ENV VITE_NODE_ADDRESS=${VITE_NODE_ADDRESS}
+ENV VITE_BACKEND_ADDRESS=${VITE_BACKEND_ADDRESS}
+
 # Build with production environment
 RUN yarn build
 
 # Stage 3: Production image
 FROM node:current-alpine AS runner
 WORKDIR /app
+
+ARG VITE_NODE_ADDRESS
+ARG VITE_BACKEND_ADDRESS
+
+ENV VITE_NODE_ADDRESS=${VITE_NODE_ADDRESS}
+ENV VITE_BACKEND_ADDRESS=${VITE_BACKEND_ADDRESS}
 
 # Install only serve package for static file serving
 RUN npm install -g serve
