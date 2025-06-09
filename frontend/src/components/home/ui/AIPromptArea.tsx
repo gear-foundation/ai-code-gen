@@ -4,11 +4,9 @@ import { useClipboard } from "@/shared/hooks/use-clipboard"
 import { cn } from "@/shared/utils/cn"
 import { useAlert } from "@gear-js/react-hooks"
 import { Button, buttonStyles, Select, Textarea } from "@gear-js/vara-ui"
-import clsx from "clsx"
 
 import { GitpodIcon } from "../assets"
 import type { AIJavascriptComponentsOptions, AIPromptOptions } from "../models/ai_options"
-import styles from "../styles/ai_prompt_area.module.scss"
 import { AIInteractionContainer } from "./AIInteractionContainer"
 import { ButtonUploadIDL } from "./Buttons/ButtonUploadIDL"
 import { ButtonUploadRustCode } from "./Buttons/ButtonUploadRustCode"
@@ -31,7 +29,7 @@ interface Props {
   codeAlreadyAudited?: boolean
 }
 
-export const AIPromptArea = ({
+export function AIPromptArea({
   onSubmitPrompt,
   onPromptChange,
   onIdlChange,
@@ -45,7 +43,7 @@ export const AIPromptArea = ({
   onOptionVariantSelected = () => {},
   updateContractButtonEnable = false,
   codeAlreadyAudited = false,
-}: Props) => {
+}: Props) {
   const fileRef = useRef<string | null>(null)
   const rustLibFileRef = useRef<string | null>(null)
   const rustServiceFileRef = useRef<string | null>(null)

@@ -74,11 +74,11 @@ function SelectOptions({
   const [optionSelected, setOptionSelected] = useState<AIPromptOptions>(currentSelected)
 
   return (
-    <div>
+    <div className={cn("", className)}>
       <Select
         name={"Variants"}
         size={"large"}
-        className={cn("*:bg-background *:!py-2.5", className)}
+        className="*:bg-background *:!py-2.5"
         disabled={waitingForResponse}
         value={optionSelected}
         onChange={(e) => {
