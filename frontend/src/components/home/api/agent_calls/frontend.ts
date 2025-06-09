@@ -1,10 +1,10 @@
-import { AGENT_API_KEY } from "@/consts"
+import { ADDRESS, AGENT_API_KEY } from "@/app/consts"
 import axios from "axios"
 
 import { client_idl_code } from "@/components/home/api/agent_calls/idl"
 import type { AgentResponse } from "@/components/home/models/agent_call"
 
-const API_URL = "https://vara-code-gen-ia-api.vercel.app/ia-generator/"
+const API_URL = ADDRESS.BACKEND
 const FRONTEND_SAILSCALLS = "sailscalls_frontend_agent"
 const FRONTEND_SAILSJS = "sailsjs_frontend_agent"
 const FRONTEND_WALLETCONNECT = "walletconnect_frontend_agent"

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { CorrectIcon } from "@/shared/assets/images"
+import { CopyIcon, CorrectIcon } from "@/shared/assets/images"
 import { useClipboard } from "@/shared/hooks/use-clipboard"
 import { cn } from "@/shared/utils/cn"
 import { useAlert } from "@gear-js/react-hooks"
@@ -116,11 +116,10 @@ export function AIPromptArea({
       leftSideChildren={
         <>
           <Button
-            text={hasCopied ? "" : "Copy repo link"}
+            text={hasCopied ? "" : "Repo link"}
             size={"x-small"}
-            icon={hasCopied ? CorrectIcon : undefined}
+            icon={hasCopied ? CorrectIcon : CopyIcon}
             color="grey"
-            isLoading={disableComponents}
             className={"whitespace-nowrap"}
             onClick={onCopy}
           />
