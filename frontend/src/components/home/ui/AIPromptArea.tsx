@@ -184,7 +184,7 @@ export const AIPromptArea = ({
           <Select
             name={"Variants"}
             size={"large"}
-            className="grow basis-50 *:bg-background *:!py-1.25"
+            className="grow basis-50 *:bg-background *:!py-1.25 md:grow-0"
             disabled={disableComponents}
             value={optionVariantSelected}
             onChange={(e) => {
@@ -218,12 +218,16 @@ export const AIPromptArea = ({
           size={"x-small"}
           isLoading={disableComponents}
           onClick={handleOnSubmitPrompt}
-          className="grow"
+          className="grow md:grow-0"
         />
 
-        <ButtonUploadIDL onIDLFileSubmit={handleSubmitIDL} disableButton={disableComponents} className="grow" />
+        <ButtonUploadIDL
+          onIDLFileSubmit={handleSubmitIDL}
+          disableButton={disableComponents}
+          className="grow md:grow-0"
+        />
 
-        {idlName && <p className="flex grow basis-50 items-center justify-center font-medium">{idlName}</p>}
+        {idlName && <p className="flex grow basis-50 items-center justify-center font-medium md:grow-0">{idlName}</p>}
       </div>
     </AIInteractionContainer>
   )
