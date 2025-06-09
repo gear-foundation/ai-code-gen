@@ -498,7 +498,7 @@ export const AISection = () => {
         }
         // isContractQuestion={optionSelected === 'Smart Contracts'}
         updateContractButtonEnable={
-          dataToUse.optionSelected == "Smart Contracts" &&
+          dataToUse.optionSelected === "Smart Contracts" &&
           optionSelected === "Smart Contracts" &&
           (contractHistory.length > 0 || currentContractCode.current.service.length > 0)
         }
@@ -552,7 +552,7 @@ export const AISection = () => {
                 // dataToUse.frontendOptionSelected === 'GasLess/ez-transactions'
               ) && (
                 <>
-                  {dataToUse.optionSelected == "Smart Contracts" &&
+                  {dataToUse.optionSelected === "Smart Contracts" &&
                     optionSelected === "Smart Contracts" &&
                     contractAudited && (
                       // optionSelected == 'Smart Contracts' && contractAudited && (
@@ -591,7 +591,6 @@ export const AISection = () => {
                 </>
               )}
               <Button
-                // text={ hasCopied ? 'Copied!' : 'Copy' }
                 icon={hasCopied ? CorrectIcon : CopyIcon}
                 size="x-large"
                 color="contrast"

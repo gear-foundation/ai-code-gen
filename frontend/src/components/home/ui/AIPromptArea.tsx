@@ -118,12 +118,12 @@ export const AIPromptArea = ({
       leftSideChildren={
         <>
           <Button
-            text={hasCopied ? "" : "Clone repository"}
+            text={hasCopied ? "" : "Fork repo"}
             size={"x-small"}
             icon={hasCopied ? CorrectIcon : undefined}
             color="grey"
             isLoading={disableComponents}
-            className={""}
+            className={"whitespace-nowrap"}
             onClick={onCopy}
           />
 
@@ -142,7 +142,12 @@ export const AIPromptArea = ({
             }
             target="_blank"
             rel="noreferrer"
-            className={cn(buttonStyles.button, buttonStyles.transparent, buttonStyles["x-small"], "leading-none")}
+            className={cn(
+              buttonStyles.button,
+              buttonStyles.transparent,
+              buttonStyles["x-small"],
+              "leading-none whitespace-nowrap"
+            )}
           >
             <GitpodIcon className="*:fill-current *:text-current" />
             Open in Gitpod
@@ -162,24 +167,24 @@ export const AIPromptArea = ({
       {optionSelected === "Smart Contracts" && (
         <div className="flex items-center justify-end gap-4">
           <ButtonUploadRustCode
-            title="Add service.rs"
+            title="service.rs"
             onRustFileSubmit={handleSubmitServiceRustFIle}
             disableButton={disableComponents}
           />
           <ButtonUploadRustCode
-            title="Add lib.rs"
+            title="lib.rs"
             onRustFileSubmit={handleSubmitLibrsRustFile}
             disableButton={disableComponents}
           />
         </div>
       )}
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         {optionVariants && (
           <Select
             name={"Variants"}
             size={"large"}
-            className="*:bg-background *:!py-1.25"
+            className="grow basis-50 *:bg-background *:!py-1.25"
             disabled={disableComponents}
             value={optionVariantSelected}
             onChange={(e) => {
@@ -208,11 +213,17 @@ export const AIPromptArea = ({
             <Button text="Update" size={"x-small"} isLoading={disableComponents} onClick={handleOnUpdateContract} />
           </>
         )}
-        <Button text="Generate" size={"x-small"} isLoading={disableComponents} onClick={handleOnSubmitPrompt} />
+        <Button
+          text="Generate"
+          size={"x-small"}
+          isLoading={disableComponents}
+          onClick={handleOnSubmitPrompt}
+          className="grow"
+        />
 
-        <ButtonUploadIDL onIDLFileSubmit={handleSubmitIDL} disableButton={disableComponents} />
+        <ButtonUploadIDL onIDLFileSubmit={handleSubmitIDL} disableButton={disableComponents} className="grow" />
 
-        {idlName && <p className={styles.idlName}>{idlName}</p>}
+        {idlName && <p className="flex grow basis-50 items-center justify-center font-medium">{idlName}</p>}
       </div>
     </AIInteractionContainer>
   )

@@ -4,9 +4,10 @@ import { Button } from "@gear-js/vara-ui"
 interface Props {
   onIDLFileSubmit: (fileContent: string, fileName: string) => void
   disableButton?: boolean
+  className?: string
 }
 
-export const ButtonUploadIDL = ({ onIDLFileSubmit, disableButton }: Props) => {
+export const ButtonUploadIDL = ({ onIDLFileSubmit, disableButton, className }: Props) => {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const handleClick = () => {
@@ -44,7 +45,14 @@ export const ButtonUploadIDL = ({ onIDLFileSubmit, disableButton }: Props) => {
 
   return (
     <>
-      <Button text="Upload IDL" size={"x-small"} color="grey" isLoading={disableButton} onClick={handleClick} />
+      <Button
+        text="Upload IDL"
+        size={"x-small"}
+        color="grey"
+        isLoading={disableButton}
+        onClick={handleClick}
+        className={className}
+      />
       <input type="file" accept=".idl" style={{ display: "none" }} ref={inputRef} onChange={handleSelectedFile} />
     </>
   )

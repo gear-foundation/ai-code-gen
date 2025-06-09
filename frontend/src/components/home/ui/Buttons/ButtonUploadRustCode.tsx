@@ -63,6 +63,7 @@ export const ButtonUploadRustCode = ({
         onClick={handleClick}
         //onClick={handleOnSubmitPrompt}
         color={"transparent"}
+        className="[&_svg]:!size-3.5"
       />
       <input type="file" accept=".rs" hidden ref={inputRef} onChange={handleSelectedFile} />
     </>
