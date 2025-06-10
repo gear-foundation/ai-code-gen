@@ -30,10 +30,11 @@ def create_app(config_name="development"):
 
     @app.before_request
     def restrict_access_by_token():
-        if request.path.startswith("/ia-generator"):
-            token = request.headers.get("X-API-Key")
-            if not token or token != app.config["API_KEY"]:
-                abort(403, description="Forbidden: Invalid or missing API token")
+        #if request.path.startswith("/ia-generator"):
+        #    token = request.headers.get("X-API-Key")
+        #    if not token or token != app.config["API_KEY"]:
+        #        abort(403, description="Forbidden: Invalid or missing API token")
+        pass
 
     # === Routes ===
     app.register_blueprint(ia_generator_bp, url_prefix='/ia-generator')
