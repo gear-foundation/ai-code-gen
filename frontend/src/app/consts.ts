@@ -1,32 +1,39 @@
-import { HexString } from '@gear-js/api';
+import { HexString } from "@gear-js/api"
 
 interface ContractSails {
-  programId: HexString,
+  programId: HexString
   idl: string
 }
 
-export const ACCOUNT_ID_LOCAL_STORAGE_KEY = 'account';
+export const ACCOUNT_ID_LOCAL_STORAGE_KEY = "account"
 
 export const ADDRESS = {
   NODE: import.meta.env.VITE_NODE_ADDRESS,
-  BACK: import.meta.env.VITE_BACKEND_ADDRESS,
-  GAME: import.meta.env.VITE_CONTRACT_ADDRESS as HexString,
-};
+  BACKEND: import.meta.env.VITE_BACKEND_ADDRESS,
+}
+
+export const AGENT_API_KEY = import.meta.env.VITE_AGENT_API_KEY
 
 export const ROUTES = {
-  HOME: '/',
-  EXAMPLES: '/examples',
-  NOTFOUND: '*',
-};
+  HOME: "/",
+  EXAMPLES: "/examples",
+  NOTFOUND: "*",
+}
+
+export const EXTERNAL_ROUTES = {
+  VARA_NETWORK: "https://vara.network",
+  VARA_WIKI: "https://wiki.vara.network/",
+  GEAR_WHITEPAPER: "https://whitepaper.gear.foundation/",
+}
 
 // To use the example code, enter the details of the account that will pay the vouchers, etc. (name and mnemonic)
 // Here, you have an example account that contains tokens, in your dApp, you need to put a sponsor name
 // and a sponsor mnemonic
-export const sponsorName = 'Alice';
-export const sponsorMnemonic = 'bottom drive obey lake curtain smoke basket hold race lonely fit walk';
+export const sponsorName = "Alice"
+export const sponsorMnemonic = "bottom drive obey lake curtain smoke basket hold race lonely fit walk"
 
 export const CONTRACT_DATA: ContractSails = {
-  programId: '0x0f986f5a85b7c1070a760661e55bce0bf70cbc0e0713f82d01c0d878914085d7',
+  programId: "0x0f986f5a85b7c1070a760661e55bce0bf70cbc0e0713f82d01c0d878914085d7",
   idl: `
     type KeyringData = struct {
       address: str,
@@ -81,5 +88,5 @@ export const CONTRACT_DATA: ContractSails = {
       PongSignless : (user_address: actor_id) -> PingEvent;
       query LastCaller : () -> actor_id;
     };
-  `
-};
+  `,
+}

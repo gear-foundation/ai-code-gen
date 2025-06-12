@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Geist", "sans-serif";
+
+  --color-brand: oklch(0.8883 0.179258 168.293);
+  --color-brand-600: oklch(0.771 0.1533 168.7);
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0 0 0);
+  --color-muted: oklch(0.5085 0.022 217.45);
+}
+
+
+html {
+  @apply bg-gradient-to-b from-[#f5f5f7] via-[#FDFDFD] to-[#f5f5f7] text-foreground scroll-smooth;
+}
+
+#root {
+  @apply flex flex-col min-h-screen supports-[height:1svh]:min-h-dvh;
+}
+
+.container {
+  @apply mx-auto px-4 lg:px-8;
+}
+
+.gradient-text-white {
+  @apply text-transparent bg-clip-text bg-foreground bg-gradient-to-r from-30% to-75% from-background to-brand;
+}
+
+.gradient-text-black {
+  @apply text-transparent bg-clip-text bg-foreground bg-gradient-to-r from-30% to-75% from-foreground to-brand
+}

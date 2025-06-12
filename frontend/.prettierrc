@@ -1,0 +1,46 @@
+{
+  "printWidth": 120,
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "semi": false,
+  "singleQuote": false,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "useTabs": false,
+  "jsxSingleQuote": false,
+  "quoteProps": "as-needed",
+  "proseWrap": "preserve",
+  "insertPragma": false,
+  "requirePragma": false,
+  "embeddedLanguageFormatting": "auto",
+  "plugins": [
+    "@ianvs/prettier-plugin-sort-imports",
+    "prettier-plugin-tailwindcss"
+  ],
+  "tailwindStylesheet": "./src/styles.css",
+  "tailwindFunctions": [
+    "clsx",
+    "cn"
+  ],
+  "importOrder": [
+    "^(react/(.*)$)|^(react$)",
+    "^(react-dom/(.*)$)|^(react-dom$)",
+    "<THIRD_PARTY_MODULES>",
+    "",
+    "^types$",
+    "^@/types/(.*)$",
+    "^@/config/(.*)$",
+    "^@/lib/(.*)$",
+    "^@/hooks/(.*)$",
+    "^@/components/ui/(.*)$",
+    "",
+    "^@/components/(.*)$",
+    "^@/styles/(.*)$",
+    "",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true
+}

@@ -2,28 +2,54 @@
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "allowJs": false,
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ESNext",
+      "WebWorker"
+    ],
+    "allowJs": true,
     "skipLibCheck": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./src/*"]
-      //      "@/app/*": ["./src/app/*"],
-      //      "@/assets/*": ["./src/assets/*"],
-      //      "@/components/*": ["./src/components/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@public/*": [
+        "./public/*"
+      ]
     },
-    "types": ["vite-plugin-svgr/client"]
+    "types": [
+      "vite-plugin-svgr/client",
+      "node",
+      "vite/client"
+    ],
+    "typeRoots": [
+      "./node_modules/@types"
+    ],
+    "baseUrl": "."
+    //    "noUnusedLocals": true,
+    //    "noUnusedParameters": true,
+    //    "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": [
+    "src",
+    "vite-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"
