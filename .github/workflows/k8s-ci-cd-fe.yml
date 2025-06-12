@@ -70,9 +70,12 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v4
         with:
-          context: frontend
+          file: frontend/Dockerfile
           push: true
           tags: ${{ needs.prepair.outputs.image_name }}
+          build-args: |
+            VITE_NODE_ADDRESS=${{ secrets.VITE_NODE_ADDRESS }}
+            VITE_BACKEND_ADDRESS=${{ secrets.VITE_BACKEND_ADDRESS }}
 
   deploy-to-k8s:
     needs: [prepair, build-and-push-image]
