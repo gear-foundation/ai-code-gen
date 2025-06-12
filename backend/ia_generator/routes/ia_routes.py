@@ -108,7 +108,8 @@ def optimization_smartcontract_agent():
         answer = smart_contract_handler(
             OPTIMIZATION_SMART_CONTRACT_PROMPT,
             data_path,
-            question
+            question,
+            temperature=0.2
         )
         return jsonify({"question": question, "answer": answer})
     except Exception as e:
