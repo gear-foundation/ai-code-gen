@@ -1,6 +1,7 @@
+import { EXTERNAL_ROUTES } from "@/app/consts"
 import { useNavigateToAISection } from "@/helpers"
 import { cn } from "@/shared/utils/cn"
-import { Button } from "@gear-js/vara-ui"
+import { Button, buttonStyles } from "@gear-js/vara-ui"
 import { Zap } from "lucide-react"
 
 type Props = {
@@ -9,10 +10,6 @@ type Props = {
 
 export function SectionCta({ className }: Props) {
   const { onClickToSection } = useNavigateToAISection()
-
-  const handleLearnMore = () => {
-    window.open("https://github.com/gear-foundation", "_blank")
-  }
 
   return (
     <section className={cn("grid place-items-center gap-6", className)}>
@@ -33,13 +30,20 @@ export function SectionCta({ className }: Props) {
           Start Building
         </Button>
 
-        <Button
-          onClick={handleLearnMore}
+        <a
+          href={`${EXTERNAL_ROUTES.VARA_WIKI}/docs/api/tooling/ai-generator`}
+          target="_blank"
+          rel="noopener noreferrer"
           color={"border"}
-          className="grow basis-50 whitespace-nowrap sm:basis-62.5 md:grow-0"
+          className={cn(
+            "grow basis-50 whitespace-nowrap sm:basis-62.5 md:grow-0",
+            buttonStyles.button,
+            buttonStyles.border,
+            buttonStyles.default
+          )}
         >
           Learn More
-        </Button>
+        </a>
       </div>
 
       <div className="flex items-center gap-6 text-xs text-gray-600 md:text-sm">

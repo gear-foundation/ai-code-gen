@@ -30,7 +30,7 @@ export function SectionHero() {
             <Button text="Get started" onClick={onClickToSection} className="grow basis-50" />
 
             <a
-              href="https://github.com/gear-foundation"
+              href="https://github.com/gear-foundation/ai-code-gen"
               className={cn("grow basis-50", buttonStyles.button, buttonStyles.contrast, buttonStyles.default)}
             >
               <GithubMark className="size-6 *:fill-current" />

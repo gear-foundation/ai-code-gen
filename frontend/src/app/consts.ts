@@ -22,8 +22,8 @@ export const ROUTES = {
 
 export const EXTERNAL_ROUTES = {
   VARA_NETWORK: "https://vara.network",
-  VARA_WIKI: "https://wiki.vara.network/",
-  GEAR_WHITEPAPER: "https://whitepaper.gear.foundation/",
+  VARA_WIKI: "https://wiki.vara.network",
+  GEAR_WHITEPAPER: "https://whitepaper.gear.foundation",
 }
 
 // To use the example code, enter the details of the account that will pay the vouchers, etc. (name and mnemonic)
