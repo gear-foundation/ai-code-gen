@@ -1,4 +1,4 @@
-import { HOME_PROMT_SECTION, useNavigateToAISection } from "@/helpers"
+import { useNavigateToAISection } from "@/helpers"
 import { cn } from "@/shared/utils/cn"
 import { Button } from "@gear-js/vara-ui"
 import { Zap } from "lucide-react"
@@ -15,7 +15,7 @@ export function SectionCta({ className }: Props) {
   }
 
   return (
-    <section id={HOME_PROMT_SECTION} className={cn("grid place-items-center gap-6", className)}>
+    <section className={cn("grid place-items-center gap-6", className)}>
       <h2 className="gradient-text-black mx-auto inline-block bg-gradient-to-l from-[74%] to-[76.71%] text-center text-[36px] leading-[1.2] font-bold text-balance md:text-[40px] lg:text-[48px]">
         Ready to build secure and scalable dApps?
       </h2>
