@@ -11,24 +11,31 @@ import { ReactComponent as CopyDecoded } from "./icons/copy-decoded.svg"
 import { ReactComponent as CorrectIcon } from "./icons/correct_copy_icon.svg"
 import { ReactComponent as GreenCorrectIcon } from "./icons/correct_icon_green.svg"
 import { ReactComponent as CrossIcon } from "./icons/cross.svg"
-import { ReactComponent as DiscordIcon } from "./icons/discord.svg"
+import { ReactComponent as DataIcon } from "./icons/data-icon.svg"
+import { ReactComponent as DevIcon } from "./icons/dev-icon.svg"
+import { ReactComponent as DiscordIcon } from "./icons/discord-icon.svg"
 import { ReactComponent as GearIcon } from "./icons/gear.svg"
+import { ReactComponent as GithubIcon } from "./icons/github-icon.svg"
 import { ReactComponent as GithubMarkWhite } from "./icons/github-mark-white.svg"
 import { ReactComponent as GithubMark } from "./icons/github-mark.svg"
-import { ReactComponent as GithubIcon } from "./icons/github.svg"
-import { ReactComponent as MediumIcon } from "./icons/medium.svg"
-import { ReactComponent as TwitterIcon } from "./icons/twitter.svg"
+import { ReactComponent as GitpodIcon } from "./icons/gitpod-icon.svg"
+import { ReactComponent as MediumIcon } from "./icons/medium-icon.svg"
+import { ReactComponent as RobotIcon } from "./icons/robot-icon.svg"
+import { ReactComponent as SecurityIcon } from "./icons/security-icon.svg"
+import { ReactComponent as TelegramIcon } from "./icons/telegram-icon.svg"
 import { ReactComponent as VaraLogoIcon } from "./icons/vara-logo.svg"
+import { ReactComponent as XIcon } from "./icons/x-icon.svg"
 
 export {
   CrossIcon,
   GearIcon,
-  TwitterIcon,
   GithubIcon,
   GithubMarkWhite,
   GithubMark,
   DiscordIcon,
   MediumIcon,
+  TelegramIcon,
+  XIcon,
   VaraLogoIcon,
   ChevronDown,
   ChevronLeft,
@@ -42,4 +49,9 @@ export {
   CorrectIcon,
   GreenCorrectIcon,
   AddIcon,
+  DataIcon,
+  DevIcon,
+  RobotIcon,
+  SecurityIcon,
+  GitpodIcon,
 }

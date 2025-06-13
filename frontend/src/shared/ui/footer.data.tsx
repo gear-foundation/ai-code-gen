@@ -15,11 +15,11 @@ export const FOOTER_NAVIGATION = [
       },
       {
         title: "Tokenomics",
-        link: EXTERNAL_ROUTES.VARA_NETWORK + "/tokenomics",
+        link: EXTERNAL_ROUTES.VARA_NETWORK + "/network/tokenomics",
       },
       {
         title: "Network Activity",
-        link: EXTERNAL_ROUTES.VARA_NETWORK + "/network-activity",
+        link: EXTERNAL_ROUTES.VARA_NETWORK + "/network",
       },
       {
         title: "News",
