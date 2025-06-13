@@ -117,7 +117,7 @@ export const AISection = () => {
     updateContract = false,
     auditContract = false
   ) => {
-    if (prompt.length == 0 && !auditContract) {
+    if (prompt.length === 0 && !auditContract) {
       console.error("prompt cant be empty")
       alert.error("Prompt cant be empty")
       return

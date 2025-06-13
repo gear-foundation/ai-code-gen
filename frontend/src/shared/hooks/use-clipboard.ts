@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 interface UseClipboardReturn {
   hasCopied: boolean
@@ -10,10 +10,13 @@ export const useClipboard = (initialValue?: string): UseClipboardReturn => {
   const [value, setValue] = useState(initialValue || "")
   const [hasCopied, setHasCopied] = useState(false)
 
-  const onCopy = async () => {
+  useEffect(() => {
+    setValue(initialValue || "")
+  }, [initialValue])
+
+  const onCopy = useCallback(async () => {
     try {
       if (navigator.clipboard && window.isSecureContext) {
-        // Используем современный Clipboard API если доступен
         await navigator.clipboard.writeText(value)
       } else {
         // Fallback для старых браузеров
@@ -36,7 +39,6 @@ export const useClipboard = (initialValue?: string): UseClipboardReturn => {
 
       setHasCopied(true)
 
-      // Сбрасываем состояние через 2 секунды
       setTimeout(() => {
         setHasCopied(false)
       }, 2000)
@@ -44,7 +46,7 @@ export const useClipboard = (initialValue?: string): UseClipboardReturn => {
       console.error("Failed to copy to clipboard:", error)
       setHasCopied(false)
     }
-  }
+  }, [value])
 
   return {
     hasCopied,
