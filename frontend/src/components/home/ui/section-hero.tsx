@@ -10,7 +10,7 @@ export function SectionHero() {
     <section
       className={cn(
         "relative z-1 pt-15 pb-20 text-foreground drop-shadow-sm drop-shadow-foreground/10 filter md:pb-25",
-        "before:absolute before:top-1/2 before:left-1/2 before:-z-2 before:h-full before:w-full before:-translate-x-1/2 before:-translate-y-1/2 before:bg-brand before:[clip-path:polygon(0_0,100%_0,100%_97%,82%_99%,0_99%)] md:before:[clip-path:polygon(0_0,100%_0,100%_95%,69%_97%,0_100%)]",
+        "before:absolute before:top-1/2 before:left-1/2 before:-z-2 before:size-full before:-translate-x-1/2 before:-translate-y-1/2 before:bg-brand before:[clip-path:polygon(0_0,100%_0,100%_97%,82%_99%,0_99%)] md:before:[clip-path:polygon(0_0,100%_0,100%_95%,69%_97%,0_100%)]",
         "after:absolute after:top-1/2 after:left-1/2 after:-z-1 after:size-full after:-translate-x-1/2 after:-translate-y-1/2 after:bg-background after:[clip-path:polygon(0_0,100%_0,100%_97%,85%_99%,0_95%)] md:after:[clip-path:polygon(0_0,100%_0,100%_95%,69%_97%,0_91%)]"
       )}
     >
@@ -31,6 +31,8 @@ export function SectionHero() {
 
             <a
               href="https://github.com/gear-foundation/ai-code-gen"
+              target="_blank"
+              rel="noopener noreferrer"
               className={cn("grow basis-50", buttonStyles.button, buttonStyles.contrast, buttonStyles.default)}
             >
               <GithubMark className="size-6 *:fill-current" />

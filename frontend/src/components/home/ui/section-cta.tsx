@@ -34,7 +34,6 @@ export function SectionCta({ className }: Props) {
           href={`${EXTERNAL_ROUTES.VARA_WIKI}/docs/api/tooling/ai-generator`}
           target="_blank"
           rel="noopener noreferrer"
-          color={"border"}
           className={cn(
             "grow basis-50 whitespace-nowrap sm:basis-62.5 md:grow-0",
             buttonStyles.button,
