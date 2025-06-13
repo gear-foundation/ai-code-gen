@@ -2,7 +2,7 @@ import type { PropsWithChildren } from "react"
 import { FOOTER_NAVIGATION } from "@/shared/ui/footer.data"
 import { cn } from "@/shared/utils/cn"
 
-import { DiscordIcon, GitHubIcon, MediumIcon, TelegramIcon, XIcon } from "./footer/assets"
+import { DiscordIcon, GithubIcon, MediumIcon, TelegramIcon, XIcon } from "../assets/images"
 
 export const Footer = () => {
   return (
@@ -15,7 +15,7 @@ export const Footer = () => {
               <span className="max-md:hidden">X.com</span>
             </SocialLink>
             <SocialLink href="https://github.com/gear-foundation">
-              <GitHubIcon />
+              <GithubIcon />
               <span className="max-md:hidden">Github</span>
             </SocialLink>
             <SocialLink href="https://medium.com/@VaraNetwork">

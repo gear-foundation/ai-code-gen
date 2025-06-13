@@ -1,6 +1,5 @@
+import { DataIcon, DevIcon, RobotIcon, SecurityIcon } from "@/shared/assets/images"
 import { Card } from "@/shared/ui/card"
-
-import { DataIcon, DevIcon, RobotIcon, SecurityIcon } from "../assets"
 
 export function SectionAbout() {
   return (

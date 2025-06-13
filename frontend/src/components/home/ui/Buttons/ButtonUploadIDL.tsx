@@ -49,7 +49,7 @@ export const ButtonUploadIDL = ({ onIDLFileSubmit, disableButton, className }: P
         text="Upload IDL"
         size={"x-small"}
         color="grey"
-        isLoading={disableButton}
+        disabled={disableButton}
         onClick={handleClick}
         className={className}
       />

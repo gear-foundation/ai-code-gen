@@ -1,21 +1,10 @@
+import { useNavigateToAISection } from "@/helpers"
 import { GithubMark } from "@/shared/assets/images"
 import { cn } from "@/shared/utils/cn"
 import { Button, buttonStyles } from "@gear-js/vara-ui"
-import { useNavigate } from "react-router-dom"
 
 export function SectionHero() {
-  const navigate = useNavigate()
-
-  const handleClick = () => {
-    navigate("/#subtitle-ready-to-build")
-
-    setTimeout(() => {
-      const element = document.getElementById("subtitle-ready-to-build")
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth" })
-      }
-    }, 100)
-  }
+  const { onClickToSection } = useNavigateToAISection()
 
   return (
     <section
@@ -38,7 +27,7 @@ export function SectionHero() {
             </p>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-4">
-            <Button text="Get started" onClick={handleClick} className="grow basis-50" />
+            <Button text="Get started" onClick={onClickToSection} className="grow basis-50" />
 
             <a
               href="https://github.com/gear-foundation"

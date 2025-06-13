@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react"
-import { CopyIcon, CorrectIcon } from "@/shared/assets/images"
+import { CopyIcon, CorrectIcon, GitpodIcon } from "@/shared/assets/images"
 import { useClipboard } from "@/shared/hooks/use-clipboard"
 import { cn } from "@/shared/utils/cn"
 import { useAlert } from "@gear-js/react-hooks"
 import { Button, buttonStyles, Select, Textarea } from "@gear-js/vara-ui"
 
-import { GitpodIcon } from "../assets"
 import type { AIJavascriptComponentsOptions, AIPromptOptions } from "../models/ai_options"
 import { AIInteractionContainer } from "./AIInteractionContainer"
 import { ButtonUploadIDL } from "./Buttons/ButtonUploadIDL"

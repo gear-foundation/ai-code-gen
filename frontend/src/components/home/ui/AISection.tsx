@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react"
+import { HOME_PROMT_SECTION } from "@/helpers"
 import { CopyIcon, CorrectIcon, GreenCorrectIcon } from "@/shared/assets/images"
 import { useClipboard } from "@/shared/hooks/use-clipboard"
+import { cn } from "@/shared/utils/cn"
 import { useAlert } from "@gear-js/react-hooks"
 import { Button } from "@gear-js/vara-ui"
 
@@ -117,7 +119,7 @@ export const AISection = () => {
     updateContract = false,
     auditContract = false
   ) => {
-    if (prompt.length == 0 && !auditContract) {
+    if (prompt.length === 0 && !auditContract) {
       console.error("prompt cant be empty")
       alert.error("Prompt cant be empty")
       return
@@ -400,7 +402,7 @@ export const AISection = () => {
   }, [optionSelected])
 
   return (
-    <div className="grid gap-4">
+    <div id={HOME_PROMT_SECTION} className="grid scroll-mt-20 gap-4">
       <AIOptionSelection
         options={options}
         selected={handleSelected}
