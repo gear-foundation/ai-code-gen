@@ -1,5 +1,5 @@
 # Stage 1: Dependencies installation
-FROM node:current-alpine AS deps
+FROM node:alpine AS deps
 WORKDIR /app
 
 COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./
@@ -8,7 +8,7 @@ COPY frontend/.yarn/releases .yarn/releases
 RUN yarn install --frozen-lockfile
 
 # Stage 2: Build application
-FROM node:current-alpine AS builder
+FROM node:alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -24,7 +24,7 @@ ENV VITE_BACKEND_ADDRESS=${VITE_BACKEND_ADDRESS}
 RUN yarn build
 
 # Stage 3: Production image
-FROM node:current-alpine AS runner
+FROM node:alpine AS runner
 WORKDIR /app
 
 ARG VITE_NODE_ADDRESS
