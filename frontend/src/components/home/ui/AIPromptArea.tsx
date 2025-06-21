@@ -51,15 +51,15 @@ export function AIPromptArea({
 
   const { hasCopied, onCopy } = useClipboard(
     optionSelected === "Frontend"
-      ? GITCLONE + "https://gitpod.io/new/#https://github.com/Vara-Lab/dapp-template.git"
+      ? GITCLONE + "https://github.com/Vara-Lab/dapp-template.git"
       : optionSelected === "Smart Contracts"
-        ? GITCLONE + "https://gitpod.io/new/#https://github.com/Vara-Lab/Smart-Program-Template.git"
+        ? GITCLONE + "https://github.com/Vara-Lab/Smart-Program-Template.git"
         : optionSelected === "Server"
-          ? GITCLONE + "https://gitpod.io/new/#https://github.com/Vara-Lab/Server-Template.git"
+          ? GITCLONE + "https://github.com/Vara-Lab/Server-Template.git"
           : (optionSelected === "Web3 abstraction" && optionVariantSelected === "GasLess/ez-transactions") ||
               (optionSelected === "Web3 abstraction" && optionVariantSelected === "SignLess/ez-transactions")
-            ? GITCLONE + "https://gitpod.io/new/#https://github.com/Vara-Lab/ez-dApp-Template.git"
-            : GITCLONE + "https://gitpod.io/new/#https://github.com/Vara-Lab/dapp-template.git"
+            ? GITCLONE + "https://github.com/Vara-Lab/ez-dApp-Template.git"
+            : GITCLONE + "https://github.com/Vara-Lab/dapp-template.git"
   )
   const alert = useAlert()
 
