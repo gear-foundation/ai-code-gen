@@ -1,43 +1,31 @@
-# Stage 1: Dependencies installation
-FROM node:alpine AS deps
+FROM node:20-alpine AS build
+
 WORKDIR /app
+
+ARG VITE_NODE_ADDRESS
+ARG VITE_BACKEND_ADDRESS
+
+ENV VITE_NODE_ADDRESS=${VITE_NODE_ADDRESS} \
+    VITE_BACKEND_ADDRESS=${VITE_BACKEND_ADDRESS}
 
 COPY frontend/package.json frontend/yarn.lock frontend/.yarnrc.yml ./
 COPY frontend/.yarn/releases .yarn/releases
-
 RUN yarn install --frozen-lockfile
 
-# Stage 2: Build application
-FROM node:alpine AS builder
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ .
-
-ARG VITE_NODE_ADDRESS
-ARG VITE_BACKEND_ADDRESS
-
-ENV VITE_NODE_ADDRESS=${VITE_NODE_ADDRESS}
-ENV VITE_BACKEND_ADDRESS=${VITE_BACKEND_ADDRESS}
-
-# Build with production environment
 RUN yarn build
 
-# Stage 3: Production image
-FROM node:alpine AS runner
+FROM node:20-alpine AS run
+
 WORKDIR /app
 
-ARG VITE_NODE_ADDRESS
-ARG VITE_BACKEND_ADDRESS
+ENV NODE_ENV=production
 
-ENV VITE_NODE_ADDRESS=${VITE_NODE_ADDRESS}
-ENV VITE_BACKEND_ADDRESS=${VITE_BACKEND_ADDRESS}
+RUN npm install -g serve@14
 
-# Install only serve package for static file serving
-RUN npm install -g serve
+COPY --from=build --chown=node:node /app/dist ./dist
 
-# Copy only build files from builder stage
-COPY --from=builder /app/dist ./dist
+USER node
 
 EXPOSE 3000
 
